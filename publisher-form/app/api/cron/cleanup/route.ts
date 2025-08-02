@@ -31,9 +31,10 @@ export async function GET(request: Request) {
       await del(keysToDelete);
     }
 
-    await sql`
-    DELETE FROM submissions WHERE id = ANY(${sql.array(idsToDelete)});
-  `;
+    // Delete submissions one by one since sql.array() is not available
+    for (const id of idsToDelete) {
+      await sql`DELETE FROM submissions WHERE id = ${id}`;
+    }
     return NextResponse.json({
       message: `Deleted ${idsToDelete.length} old submissions.`,
     });

@@ -31,11 +31,18 @@ export const TrackingEmail: React.FC<Readonly<TrackingEmailProps>> = ({
         <h2 style={{ marginTop: 0, borderBottom: '1px solid #eee', paddingBottom: '10px' }}>Submission Summary</h2>
         <p style={{ margin: '10px 0' }}><strong>Offer ID:</strong> {offerDetails.network_offer_id}</p>
         <p style={{ margin: '10px 0' }}><strong>Offer Name:</strong> {offerDetails.name}</p>
-        {offerDetails.thumbnail_url && (
-          <div style={{ marginTop: '15px', textAlign: 'center' }}>
-            <img src={offerDetails.thumbnail_url} alt="Offer Thumbnail" style={{ maxWidth: '100%', borderRadius: '5px' }} />
-          </div>
-        )}
+        <div style={{ 
+          marginTop: '15px', 
+          padding: '10px', 
+          backgroundColor: '#f8f9fa', 
+          borderRadius: '5px',
+          border: '1px solid #e9ecef',
+          textAlign: 'center'
+        }}>
+          <p style={{ margin: '0', color: '#6c757d', fontSize: '14px' }}>
+            📋 Offer Details Submitted Successfully
+          </p>
+        </div>
       </div>
     )}
 
