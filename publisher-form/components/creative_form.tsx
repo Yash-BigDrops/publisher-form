@@ -1,27 +1,12 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  CardDescription2,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Upload, FileText, CheckCircle, X, RotateCw, File, FileArchive, Edit3, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, RotateCw, File, FileArchive, Search, ChevronDown } from "lucide-react";
 import JSZip from "jszip";
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-html";
@@ -300,11 +285,11 @@ export default function CreativeForm() {
   });
 
   const [offers, setOffers] = useState<string[]>([]);
-  const [isLoadingOffers, setIsLoadingOffers] = useState(true);
+
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [trackingLink, setTrackingLink] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewedCreative, setPreviewedCreative] = useState<{ url: string; type?: "image" | "html" } | null>(null);
@@ -313,11 +298,11 @@ export default function CreativeForm() {
   const [selectedOption, setSelectedOption] = useState("");
   const [uploadType, setUploadType] = useState<null | "single" | "multiple">(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
+
   const [tempFileKey, setTempFileKey] = useState<string | null>(null);
   const [isOfferDropdownOpen, setIsOfferDropdownOpen] = useState(false);
   const [isCreativeTypeDropdownOpen, setIsCreativeTypeDropdownOpen] = useState(false);
-  const [creativeTypeSearchTerm, setCreativeTypeSearchTerm] = useState("");
+
   const [fromLine, setFromLine] = useState("");
   const [subjectLines, setSubjectLines] = useState("");
   const [creativeNotes, setCreativeNotes] = useState("");
@@ -327,7 +312,7 @@ export default function CreativeForm() {
   const [htmlCode, setHtmlCode] = useState("");
   const [isCodeMaximized, setIsCodeMaximized] = useState(false);
   const [isCodeMinimized, setIsCodeMinimized] = useState(false);
-  const [isModalMinimized, setIsModalMinimized] = useState(false);
+
   const [multiCreatives, setMultiCreatives] = useState<
     { id: number; imageUrl: string; fromLine: string; subjectLine: string; notes: string; type?: "image" | "html"; htmlContent?: string }[]
   >([]);
@@ -349,7 +334,7 @@ export default function CreativeForm() {
       } catch (error) {
         console.error("Error fetching offers:", error);
       } finally {
-        setIsLoadingOffers(false);
+
       }
     };
     fetchOffers();
@@ -389,71 +374,7 @@ export default function CreativeForm() {
     setErrors({});
   };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = Array.from(event.target.files || []);
-    const newFiles: UploadedFile[] = [];
 
-    for (const file of files) {
-      let previewUrl: string | null = null;
-      if (isImageFile(file)) {
-        previewUrl = URL.createObjectURL(file);
-      }
-        newFiles.push({ file, previewUrl });
-      }
-
-    setUploadedFiles((prev) => [...prev, ...newFiles]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const handleRemoveFile = (fileNameToRemove: string) => {
-    setUploadedFiles((prev) => {
-      const fileToRemove = prev.find((f) => f.file.name === fileNameToRemove);
-      if (fileToRemove?.previewUrl) {
-        URL.revokeObjectURL(fileToRemove.previewUrl);
-      }
-      return prev.filter((f) => f.file.name !== fileNameToRemove);
-    });
-    setUploadedFiles([]);
-    setUploadedCreative(null);
-    setTempFileKey(null);
-    setHtmlCode("");
-    setIsCodeMaximized(false);
-    setIsCodeMinimized(false);
-    setIsModalMinimized(false);
-    setMultiCreatives([]);
-    setOriginalZipFileName("");
-    setEditingCreativeIndex(null);
-    setSavedMultiCreatives([]);
-    setIsZipProcessing(false);
-    setZipError(null);
-    setPreviewedCreative(null);
-  };
-
-  const validateStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          formData.affiliateId.trim() !== "" &&
-          formData.companyName.trim() !== "" &&
-          formData.firstName.trim() !== "" &&
-          formData.lastName.trim() !== ""
-        );
-      case 2:
-        return (
-          formData.contactEmail.trim() !== "" &&
-          formData.offerId.trim() !== "" &&
-          formData.creativeType.trim() !== ""
-        );
-      case 3:
-        return uploadedFiles.length > 0;
-      default:
-        return false;
-    }
-  };
 
   const handleNextStep = () => {
     const newErrors: { [key: string]: string } = {};
@@ -546,7 +467,7 @@ export default function CreativeForm() {
             setHtmlCode("");
             setIsCodeMaximized(false);
             setIsCodeMinimized(false);
-            setIsModalMinimized(false);
+      
             setMultiCreatives([]);
             setOriginalZipFileName("");
       setEditingCreativeIndex(null);
@@ -604,7 +525,7 @@ export default function CreativeForm() {
     setHtmlCode("");
     setIsCodeMaximized(false);
     setIsCodeMinimized(false);
-    setIsModalMinimized(false);
+
     
     if (selectedOption !== "From & Subject Lines") {
     setMultiCreatives([]);
@@ -816,7 +737,7 @@ export default function CreativeForm() {
         const fileResponse = await fetch(uploadedCreative.url);
         const fileBlob = await fileResponse.blob();
         const fileName = uploadedCreative.name;
-        const file = Object.assign(fileBlob, { name: fileName }) as any;
+        const file = Object.assign(fileBlob, { name: fileName }) as File;
         submissionData.append("files", file);
       } catch (error) {
         console.error("Error fetching saved creative:", error);
@@ -840,7 +761,7 @@ export default function CreativeForm() {
         try {
         const errorData = await response.json();
           errorMessage = errorData.error || errorMessage;
-        } catch (jsonError) {
+        } catch {
           const errorText = await response.text();
           errorMessage = errorText || errorMessage;
         }
@@ -1941,7 +1862,7 @@ export default function CreativeForm() {
                                   const previewUrl = URL.createObjectURL(blob);
                                   
                                   setUploadedFiles([{ 
-                                    file: new Blob([htmlContent], { type: 'text/html' }) as any, 
+                                    file: new Blob([htmlContent], { type: 'text/html' }) as File, 
                                     previewUrl: previewUrl, 
                                     isHtml: true 
                                   }]);
@@ -1951,7 +1872,7 @@ export default function CreativeForm() {
                                     name: fileName,
                                     size: 0,
                                     type: 'image/jpeg'
-                                  } as any;
+                                  } as File;
                                   
                                   setUploadedFiles([{ 
                                     file: file,

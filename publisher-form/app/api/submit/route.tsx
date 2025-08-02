@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
 export const dynamic = 'force-dynamic';
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     const newSubmissionId = submissionResult.rows[0].id;
     const trackingLink = `https://www.bigdropsmarketing.com/tracking_link/BDMG${newSubmissionId}`;
 
-    let offerDetails = null;
+
     const EVERFLOW_API_KEY = process.env.EVERFLOW_API_KEY;
 
     if (EVERFLOW_API_KEY && offerId) {
@@ -83,14 +83,14 @@ export async function POST(request: Request) {
           cache: 'no-store',
         });
         if (response.ok) {
-          offerDetails = await response.json();
+          await response.json(); // Fetch but don't store since we don't use it
         }
       } catch (e) {
         console.error("Failed to fetch offer details for email, but proceeding anyway.", e);
       }
     }
 
-    if (contactEmail) {
+    if (contactEmail && resend) {
       try {
         // Create a simple HTML email template
         const contactName = formData.get('firstName') as string || 'there';
