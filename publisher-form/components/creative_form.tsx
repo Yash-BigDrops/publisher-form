@@ -447,17 +447,7 @@ export default function CreativeForm() {
     fetchOffers();
   }, []);
 
-  useEffect(() => {
-    const handleUnload = () => {
-      if (tempFileKey) {
-        navigator.sendBeacon(
-          `/api/creative/delete-temp?fileKey=${tempFileKey}`
-        );
-      }
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => window.removeEventListener("beforeunload", handleUnload);
-  }, [tempFileKey]);
+  // Removed temp file cleanup since we're using Vercel Blob now
 
   const handleResetForm = () => {
     uploadedFiles.forEach((f) => {
@@ -2050,7 +2040,7 @@ export default function CreativeForm() {
                               fromLine,
                               subjectLines,
                               notes: creativeNotes,
-                              fileKey: tempFileKey,
+                              fileUrl: tempFileKey,
                             };
 
                             const res = await fetch("/api/creative/save", {
