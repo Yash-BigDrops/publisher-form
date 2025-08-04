@@ -447,7 +447,6 @@ export default function CreativeForm() {
     fetchOffers();
   }, []);
 
-  // Removed temp file cleanup since we're using Vercel Blob now
 
   const handleResetForm = () => {
     uploadedFiles.forEach((f) => {
