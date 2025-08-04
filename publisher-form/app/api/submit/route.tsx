@@ -1,9 +1,8 @@
 import { sql } from '@vercel/postgres';
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { sendEmail, createSubmissionEmail } from '@/lib/emailService';
 
 export const dynamic = 'force-dynamic';
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -62,100 +61,96 @@ export async function POST(request: Request) {
       }
     }
 
-    if (contactEmail && resend) {
+    if (contactEmail) {
       try {
-        // Create a simple HTML email template
         const contactName = formData.get('firstName') as string || 'there';
-        const emailHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Submission Confirmation</title>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: #3b82f6; color: white; padding: 20px; text-align: center; }
-              .content { padding: 20px; background: #f9fafb; }
-              .tracking-link { background: #e0e7ff; padding: 15px; border-radius: 8px; margin: 20px 0; }
-              .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>Submission Confirmed!</h1>
-              </div>
-              <div class="content">
-                <p>Hello ${contactName},</p>
-                <p>Thank you for your submission! We have received your creative and it is now being processed.</p>
-                <p><strong>Priority Level:</strong> ${priority || 'Moderate'}</p>
-                <div class="tracking-link">
-                  <strong>Your Tracking Link:</strong><br>
-                  <a href="${trackingLink}" style="color: #3b82f6;">${trackingLink}</a>
-                </div>
-                <p>You can use this link to track the status of your submission.</p>
-                <p>If you have any questions, please don't hesitate to contact us.</p>
-                <p>Best regards,<br>Big Drops Marketing Team</p>
-              </div>
-              <div class="footer">
-                <p>This is an automated message. Please do not reply to this email.</p>
-              </div>
-            </div>
-          </body>
-          </html>
-        `;
         
-        await resend.emails.send({
-          from: 'Big Drops Marketing <onboarding@resend.dev>',
-          to: [contactEmail],
+        const emailHtml = createSubmissionEmail({
+          contactName,
+          priority: priority || 'Moderate',
+          trackingLink,
+        });
+        
+        const emailResult = await sendEmail({
+          to: contactEmail,
           subject: 'Your Submission Has Been Received!',
           html: emailHtml,
         });
-        console.log('Confirmation email sent successfully.');
+        
+        if (emailResult.success) {
+          console.log('Confirmation email sent successfully.');
+        } else {
+          console.error('Failed to send email:', emailResult.error);
+        }
       } catch (exception) {
         console.error('An unexpected exception occurred while sending email:', exception);
       }
     }
 
     const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
-    const telegramAdminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
 
-    if (telegramBotToken && telegramAdminChatId && telegramId && telegramId.trim() !== '') {
+    if (telegramBotToken && telegramId && telegramId.trim() !== '') {
       try {
-        const adminMessage = `
-<b>New Submission Received!</b>
+        const username = telegramId.trim().replace(/^@/, ''); 
+        
+        const result = await sql`
+          SELECT chat_id, first_name 
+          FROM telegram_users 
+          WHERE username = ${username}
+        `;
+        
+        if (result.rows.length === 0) {
+          console.log(`User @${username} not found in database - skipping Telegram notification`);
+        } else {
+          const user = result.rows[0];
+          const chatId = user.chat_id;
+          
+          const userMessage = `
+<b>Your Submission Has Been Received!</b>
 -----------------------------------
 <b>Affiliate ID:</b> ${formData.get("affiliateId")}
 <b>Company:</b> ${formData.get("companyName")}
 <b>Name:</b> ${formData.get("firstName")} ${formData.get("lastName")}
 <b>Offer ID:</b> ${offerId}
 <b>Email:</b> ${contactEmail}
-<b>Telegram:</b> ${telegramId}
-<b>Priority:</b> ${priority || "Not specified"}
+<b>Priority:</b> ${priority || "Moderate"}
 -----------------------------------
 <b>Tracking Link:</b> ${trackingLink}
+
+You can use this link to track the status of your submission.
           `;
+          
           const telegramApiUrl = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
-          await fetch(telegramApiUrl, {
+          const response = await fetch(telegramApiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              chat_id: telegramAdminChatId,
-              text: adminMessage,
+              chat_id: chatId,
+              text: userMessage,
               parse_mode: "HTML",
             }),
           });
-          console.log("Telegram admin notification sent.");
-        } catch (exception) {
-          console.error(
-            "Failed to send Telegram admin notification:",
-            exception
-          );
+          
+          const responseData = await response.json();
+          
+          if (response.ok && responseData.ok) {
+            console.log("Telegram notification sent to user's personal chat.");
+          } else {
+            if (responseData.error_code === 400 && responseData.description.includes("chat not found")) {
+              console.error("Telegram notification failed: User needs to start a conversation with the bot first. Username:", username);
+            } else {
+              console.error("Failed to send Telegram notification to user:", responseData);
+            }
+          }
         }
-    } else if (telegramBotToken && telegramAdminChatId) {
-      console.log("Telegram notification skipped - no valid Telegram ID provided by user.");
+      } catch (exception) {
+        console.error(
+          "Failed to send Telegram notification to user:",
+          exception
+        );
+      }
+    } else if (telegramBotToken) {
+      console.log("Telegram notification skipped - no valid Telegram username provided by user.");
     }
 
     return NextResponse.json({ success: true, url: primaryUrl, trackingLink: trackingLink });

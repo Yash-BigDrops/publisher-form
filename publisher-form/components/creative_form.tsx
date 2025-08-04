@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -8,8 +9,9 @@ import {
   RotateCw,
   File,
   FileArchive,
-  Search,
   ChevronDown,
+  Bot,
+  AlertTriangle,
 } from "lucide-react";
 import JSZip from "jszip";
 import AceEditor from "react-ace";
@@ -17,6 +19,7 @@ import "ace-builds/src-noconflict/mode-html";
 import "ace-builds/src-noconflict/theme-github";
 import "ace-builds/src-noconflict/theme-monokai";
 import { uploadToBlob, createCompressedPreview } from "@/lib/uploadHelpers";
+import { extractCreativeText } from "@/lib/ocrHelpers";
 
 type UploadedFile = { 
   file: File; 
@@ -25,6 +28,7 @@ type UploadedFile = {
   zipImages?: string[];
   currentImageIndex?: number;
   isHtml?: boolean;
+  displayName?: string;
 };
 
 type ExtractedCreative = {
@@ -431,6 +435,9 @@ export default function CreativeForm() {
   const [isZipProcessing, setIsZipProcessing] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
   const [priority, setPriority] = useState<"High" | "Moderate">("Moderate");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [telegramCheckStatus, setTelegramCheckStatus] = useState<"unchecked" | "checking" | "ok" | "not_started">("unchecked");
 
   useEffect(() => {
     const fetchOffers = async () => {
@@ -446,6 +453,10 @@ export default function CreativeForm() {
     };
     fetchOffers();
   }, []);
+
+  useEffect(() => {
+    console.log("isRenaming state changed:", isRenaming);
+  }, [isRenaming]);
 
 
   const handleResetForm = () => {
@@ -484,9 +495,13 @@ export default function CreativeForm() {
       }
       if (!formData.firstName.trim()) {
         newErrors.firstName = "Please enter your First Name";
+      } else if (!/^[A-Za-z\s]+$/.test(formData.firstName.trim())) {
+        newErrors.firstName = "First Name can only contain letters and spaces";
       }
       if (!formData.lastName.trim()) {
         newErrors.lastName = "Please enter your Last Name";
+      } else if (!/^[A-Za-z\s]+$/.test(formData.lastName.trim())) {
+        newErrors.lastName = "Last Name can only contain letters and spaces";
       }
     }
 
@@ -539,7 +554,160 @@ export default function CreativeForm() {
   ];
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field === 'firstName' || field === 'lastName') {
+      const filteredValue = value.replace(/[^A-Za-z\s]/g, '');
+      setFormData((prev) => ({ ...prev, [field]: filteredValue }));
+    } else {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+    }
+  };
+
+  const handleTelegramBlur = async () => {
+    const cleanUsername = formData.telegramId.trim().replace(/^@/, ''); 
+    
+    if (!cleanUsername) {
+      setTelegramCheckStatus("unchecked");
+      return;
+    }
+
+    setTelegramCheckStatus("checking");
+
+    try {
+      const res = await fetch("/api/check-telegram-start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: cleanUsername })
+      });
+
+      const data = await res.json();
+      if (data.started) {
+        setTelegramCheckStatus("ok");
+      } else {
+        setTelegramCheckStatus("not_started");
+      }
+    } catch (err) {
+      console.error("Telegram check failed", err);
+      setTelegramCheckStatus("not_started");
+    }
+  };
+
+  const enhanceWithClaude = async () => {
+    if (!formData.companyName?.trim()) {
+      alert('Please enter a Company Name first.');
+      return;
+    }
+    
+    if (!formData.offerId?.trim()) {
+      alert('Please select an Offer ID first.');
+      return;
+    }
+
+    // Check if we have creative content to analyze
+    if (uploadedFiles.length === 0 && !uploadedCreative) {
+      alert('Please upload a creative first so AI can analyze it.');
+      return;
+    }
+
+    setAiLoading(true);
+    try {
+      console.log('Starting AI suggestion generation...');
+      
+      let creativeContent = '';
+      if (uploadedFiles.length > 0) {
+        creativeContent = await extractCreativeText(uploadedFiles);
+      } else if (uploadedCreative?.url) {
+        try {
+          const response = await fetch(uploadedCreative.url);
+          const html = await response.text();
+          creativeContent = html.replace(/<[^>]+>/g, " ");
+        } catch (error) {
+          console.error('Error fetching saved creative content:', error);
+          creativeContent = 'Creative content available but could not be extracted';
+        }
+      }
+
+      console.log('Creative content length:', creativeContent.length);
+      console.log('Sending request to Claude API...');
+
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: formData.companyName,
+          offerId: formData.offerId,
+          creativeType: formData.creativeType,
+          notes: formData.otherRequest || '',
+          creativeContent: creativeContent || 'No creative content available'
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      console.log('Claude API response:', data);
+
+      if (data.suggestions) {
+        const suggestions = data.suggestions;
+        console.log('Raw suggestions:', suggestions);
+        
+        const fromLinesMatch = suggestions.match(/From.*?:\s*\n((?:\d+\.\s*[^\n]+\n?)+)/i);
+        if (fromLinesMatch) {
+          const fromLines = fromLinesMatch[1]
+            .split('\n')
+            .filter((line: string) => line.trim())
+            .map((line: string) => line.replace(/^\d+\.\s*/, ''))
+            .join('\n');
+          setFromLine(fromLines);
+          console.log('Extracted From lines:', fromLines);
+        } else {
+          console.log('No From lines pattern found in suggestions');
+        }
+
+        const subjectLinesMatch = suggestions.match(/Subject.*?:\s*\n((?:\d+\.\s*[^\n]+\n?)+)/i);
+        if (subjectLinesMatch) {
+          const subjectLines = subjectLinesMatch[1]
+            .split('\n')
+            .filter((line: string) => line.trim())
+            .map((line: string) => line.replace(/^\d+\.\s*/, ''))
+            .join('\n');
+          setSubjectLines(subjectLines);
+          console.log('Extracted Subject lines:', subjectLines);
+        } else {
+          console.log('No Subject lines pattern found in suggestions');
+        }
+
+        if (!fromLinesMatch && !subjectLinesMatch) {
+          const numberedLists = suggestions.match(/(\d+\.\s*[^\n]+\n?)+/g);
+          if (numberedLists && numberedLists.length >= 2) {
+            const firstList = numberedLists[0]
+              .split('\n')
+              .filter((line: string) => line.trim())
+              .map((line: string) => line.replace(/^\d+\.\s*/, ''))
+              .join('\n');
+            const secondList = numberedLists[1]
+              .split('\n')
+              .filter((line: string) => line.trim())
+              .map((line: string) => line.replace(/^\d+\.\s*/, ''))
+              .join('\n');
+            
+            setFromLine(firstList);
+            setSubjectLines(secondList);
+            console.log('Extracted lists as From/Subject lines');
+          }
+        }
+      } else {
+        console.log('No suggestions in response');
+        alert('No AI suggestions were generated. Please try again.');
+      }
+    } catch (error) {
+      console.error('AI suggestion error:', error);
+      alert(`Failed to get AI suggestions: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const openModal = (option: string, preserveExisting = false) => {
@@ -643,6 +811,7 @@ export default function CreativeForm() {
     setUploadedFiles([]);
     setUploadedCreative(null);
     setTempFileKey(null);
+    setIsUploading(true); 
 
     // Show processing message immediately for ZIP files
     if (file.name.toLowerCase().endsWith(".zip")) {
@@ -672,6 +841,7 @@ export default function CreativeForm() {
         // Wait for upload to complete
         const originalUrl = await uploadPromise;
         setUploadedFiles([{ file, previewUrl: htmlUrl, originalUrl, isHtml: true }]);
+        setTempFileKey(originalUrl);
       } else if (file.name.toLowerCase().endsWith(".zip")) {
         try {
           const creativesFound = await extractCreativesFromZip(file);
@@ -777,12 +947,15 @@ export default function CreativeForm() {
   } catch (error) {
     console.error("Upload failed:", error);
     alert("Failed to upload creative. Please try again.");
+  } finally {
+    setIsUploading(false);
   }
   };
 
   const handleCancelUpload = async () => {
     setTempFileKey(null);
     setUploadedFiles([]);
+    setIsUploading(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -858,6 +1031,21 @@ export default function CreativeForm() {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+
+      if (step < 3) {
+        handleNextStep();
+      } else if (step === 3) {
+        const form = e.currentTarget.closest("form");
+        if (form) {
+          form.requestSubmit();
+        }
+      }
+    }
+  };
+
   const handleMultipleCreativesSave = async () => {
     if (multiCreatives.length === 0) {
       alert("Please upload creatives before saving.");
@@ -870,13 +1058,27 @@ export default function CreativeForm() {
     }
 
     try {
+      const fileUrl = uploadType === "multiple" ? tempFileKey : uploadedFiles[0]?.originalUrl;
+      
+      console.log("Saving creative with data:", {
+        offerId: formData.offerId,
+        creativeType: formData.creativeType,
+        fromLine,
+        subjectLines,
+        multiCreativesCount: multiCreatives?.length || 0,
+        fileUrl,
+        uploadType,
+        tempFileKey,
+        uploadedFilesOriginalUrl: uploadedFiles[0]?.originalUrl
+      });
+
       const creativeData = {
         offerId: formData.offerId,
         creativeType: formData.creativeType,
         fromLine,
         subjectLines,
         multiCreatives,
-        fileUrl: tempFileKey,
+        fileUrl,
       };
 
       const res = await fetch("/api/creative/save", {
@@ -950,9 +1152,11 @@ export default function CreativeForm() {
       }}
     >
       <div className="mb-6 sm:mb-8 animate-slide-down">
-        <img
+        <Image
           src="/images/logo.svg"
           alt="Big Drops Marketing Group"
+          width={48}
+          height={48}
           className="h-10 sm:h-12 w-auto transition-transform hover:scale-105 duration-300"
         />
       </div>
@@ -985,7 +1189,7 @@ export default function CreativeForm() {
           }}
         ></div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4 sm:space-y-5">
           {step === 1 && (
             <>
               <div>
@@ -1089,15 +1293,67 @@ export default function CreativeForm() {
               </div>
 
               <div className="animate-fade-in-delay">
-                <input
-                  type="text"
-                  placeholder="Telegram ID (Optional)"
-                  value={formData.telegramId}
-                  onChange={(e) =>
-                    handleInputChange("telegramId", e.target.value)
-                  }
-                  className="w-full h-14 border border-gray-300 rounded-lg px-4 font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Telegram Username (Optional)"
+                    value={formData.telegramId}
+                    onChange={(e) =>
+                      handleInputChange("telegramId", e.target.value)
+                    }
+                    onBlur={handleTelegramBlur}
+                    className="w-full h-14 border border-gray-300 rounded-lg px-4 pr-20 font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400"
+                  />
+                  
+                  <button
+                    type="button"
+                    onClick={handleTelegramBlur}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-sky-500 text-white rounded-md hover:bg-sky-600 transition-all text-sm font-medium"
+                  >
+                    Check
+                  </button>
+                </div>
+
+                {telegramCheckStatus === "checking" && (
+                  <p className="text-gray-500 text-sm mt-1">Checking Telegram connection...</p>
+                )}
+
+                {telegramCheckStatus === "not_started" && (
+                  <div className="mt-2 flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-yellow-800 font-medium">Telegram setup required</p>
+                      <p className="text-xs text-yellow-700 mt-0.5">
+                        Please follow these steps:
+                      </p>
+                      <ol className="text-xs text-yellow-700 mt-1 ml-4 list-decimal">
+                        <li>Click the link below to open our bot</li>
+                        <li>Send <code className="bg-yellow-100 px-1 rounded">/start</code> to the bot</li>
+                        <li>Come back and try again</li>
+                      </ol>
+                      <a
+                        href="https://t.me/BigDropsMarketingBot?start=from_web_form"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-sky-600 underline mt-2 inline-block"
+                      >
+                        Open @BigDropsMarketingBot
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {telegramCheckStatus === "ok" && (
+                  <div className="mt-2 flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-green-800 font-medium">Telegram connected!</p>
+                      <p className="text-xs text-green-700 mt-0.5">
+                        You&apos;ll receive notifications on Telegram when your submission is processed.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -1120,13 +1376,11 @@ export default function CreativeForm() {
                     onBlur={() => {
                       setTimeout(() => setIsOfferDropdownOpen(false), 200);
                     }}
-                    className={`w-full h-12 sm:h-14 border rounded-lg pl-10 sm:pl-12 pr-8 sm:pr-10 font-sans text-sm sm:text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 mb-4 ${
+                    className={`w-full h-12 sm:h-14 border rounded-lg pl-3 sm:pl-4 pr-8 sm:pr-10 font-sans text-sm sm:text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 mb-4 ${
                       errors.offerId ? "border-red-500" : "border-gray-300"
                     }`}
                   />
-                  <div className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                    <Search className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
-                  </div>
+
                   <div className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                     <ChevronDown
                       className={`h-4 w-4 sm:h-5 sm:w-5 text-gray-400 transition-transform duration-200 ${isOfferDropdownOpen ? "rotate-180" : ""}`}
@@ -1297,6 +1551,17 @@ export default function CreativeForm() {
                       <button
                         type="button"
                         onClick={() => {
+                          openModal("Single Creative", true);
+                          setUploadType("single");
+                        }}
+                        className="px-3 py-1 text-sm border border-sky-400 text-sky-700 rounded bg-sky-50 hover:bg-sky-100 font-sans transition-all duration-300"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
                           setUploadedFiles([]);
                           setUploadedCreative(null);
                           setTempFileKey(null);
@@ -1317,7 +1582,7 @@ export default function CreativeForm() {
                     </div>
                   </div>
 
-                  {multiCreatives.length > 0 && formData.creativeType.toLowerCase() === "email" && (
+                  {(multiCreatives.length > 0 || savedMultiCreatives.length > 0 || uploadedCreative) && formData.creativeType.toLowerCase() === "email" && (
                     <button
                       type="button"
                       onClick={() => openModal("From & Subject Lines")}
@@ -1531,9 +1796,11 @@ export default function CreativeForm() {
                 }}
               />
             ) : (
-              <img
+              <Image
                 src={previewImage}
                 alt="Full Preview"
+                width={1200}
+                height={900}
                 className="h-auto w-auto max-h-[85vh] max-w-[85vw] rounded-md shadow-lg object-contain bg-gray-50 p-4"
               />
             )}
@@ -1592,24 +1859,43 @@ export default function CreativeForm() {
               <>
                 {uploadType === "single" && uploadedFiles.length > 0 ? (
                   <div className="flex flex-col lg:flex-row gap-6">
-                    <div className="lg:w-5/12 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex items-center justify-center p-2 max-h-[85vh] relative">
-                      {uploadedFiles[0].previewUrl ? (
-                        <div className="relative group w-full h-full">
-                          <div className="w-full h-full overflow-hidden">
-                            {uploadedFiles[0].isHtml ? (
-                              <iframe
+                                      <div className="lg:w-5/12 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex items-center justify-center p-2 max-h-[85vh] relative">
+                    {uploadedFiles[0].previewUrl ? (
+                      <div className="relative group w-full h-full">
+                        {/* Maximize Button */}
+                        <button
+                          onClick={() => setPreviewImage(uploadedFiles[0].previewUrl || "")}
+                          className="absolute top-2 right-2 bg-white rounded-full p-2 shadow-md hover:shadow-lg transition-all duration-200 z-30"
+                          title="Maximize"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5 text-gray-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4h4M20 16v4h-4M4 16v4h4M20 8V4h-4" />
+                          </svg>
+                        </button>
+                        
+                        <div className="w-full h-full overflow-auto">
+                          {uploadedFiles[0].isHtml ? (
+                            <iframe
+                              src={uploadedFiles[0].previewUrl || ""}
+                              className="w-full min-h-[600px] border-0 bg-white"
+                              sandbox="allow-scripts allow-same-origin"
+                              title="HTML Creative Preview"
+                            />
+                          ) : (
+                            <div className="relative w-full h-full flex items-center justify-center">
+                              <Image
                                 src={uploadedFiles[0].previewUrl || ""}
-                                className="w-full h-full border-0 min-h-[400px] group-hover:blur-sm transition duration-300 bg-white"
-                                sandbox="allow-scripts allow-same-origin"
-                                title="HTML Creative Preview"
+                                alt="Uploaded Creative"
+                                width={800}
+                                height={600}
+                                className="max-h-full w-auto object-contain"
                               />
-                            ) : (
-                              <div className="relative w-full h-full flex items-center justify-center">
-                                <img
-                                  src={uploadedFiles[0].previewUrl || ""}
-                                  alt="Uploaded Creative"
-                                  className="max-h-full w-auto object-contain group-hover:blur-sm transition duration-300"
-                                />
 
                                 {uploadedFiles[0].zipImages &&
                                   uploadedFiles[0].zipImages.length > 1 && (
@@ -1678,17 +1964,7 @@ export default function CreativeForm() {
                             )}
                           </div>
 
-                          <div
-                            onClick={() =>
-                              setPreviewImage(uploadedFiles[0].previewUrl || "")
-                            }
-                            className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100
-                                       transition-opacity duration-300 cursor-pointer z-20"
-                          >
-                            <div className="bg-black bg-opacity-60 text-white px-6 py-3 rounded-lg shadow-lg text-lg font-bold">
-                              Preview Image
-                            </div>
-                          </div>
+
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-full text-gray-500">
@@ -1729,33 +2005,31 @@ export default function CreativeForm() {
                               value={tempFileName}
                               onChange={(e) => setTempFileName(e.target.value)}
                               onBlur={() => {
-                                setUploadedFiles((prev) =>
-                                  prev.map((file) => ({
-                                    ...file,
-                                    file:
-                                      file.file && typeof file.file === 'object' && 'name' in file.file
-                                        ? Object.assign(file.file, {
-                                            name: tempFileName,
-                                          })
-                                        : file.file,
-                                  }))
-                                );
-                                setIsRenaming(false);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
+                                const currentDisplayName = uploadedFiles[0]?.displayName || uploadedFiles[0]?.file?.name || "creative.html";
+                                if (tempFileName !== currentDisplayName) {
                                   setUploadedFiles((prev) =>
                                     prev.map((file) => ({
                                       ...file,
-                                      file:
-                                        file.file && typeof file.file === 'object' && 'name' in file.file
-                                          ? Object.assign(file.file, {
-                                              name: tempFileName,
-                                            })
-                                          : file.file,
+                                      displayName: tempFileName,
                                     }))
                                   );
+                                }
+                                setIsRenaming(false);
+                                setTempFileName("");
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  const currentDisplayName = uploadedFiles[0]?.displayName || uploadedFiles[0]?.file?.name || "creative.html";
+                                  if (tempFileName !== currentDisplayName) {
+                                    setUploadedFiles((prev) =>
+                                      prev.map((file) => ({
+                                        ...file,
+                                        displayName: tempFileName,
+                                      }))
+                                    );
+                                  }
                                   setIsRenaming(false);
+                                  setTempFileName("");
                                 }
                               }}
                               className="ml-2 border border-gray-300 rounded px-1 py-0.5 text-sm font-sans"
@@ -1766,13 +2040,14 @@ export default function CreativeForm() {
                               className="ml-2 cursor-pointer text-gray-700 hover:underline font-sans"
                               onClick={() => {
                                 setTempFileName(
+                                  uploadedFiles[0]?.displayName ||
                                   uploadedFiles[0]?.file?.name ||
                                     "creative.html"
                                 );
                                 setIsRenaming(true);
                               }}
                             >
-                              {uploadedFiles[0]?.file?.name || "creative.html"}
+                              {uploadedFiles[0]?.displayName || uploadedFiles[0]?.file?.name || "creative.html"}
                             </span>
                           )}
 
@@ -1781,6 +2056,7 @@ export default function CreativeForm() {
                               type="button"
                               onClick={() => {
                                 setTempFileName(
+                                  uploadedFiles[0]?.displayName ||
                                   uploadedFiles[0]?.file?.name ||
                                     "creative.html"
                                 );
@@ -1793,21 +2069,33 @@ export default function CreativeForm() {
                           ) : (
                             <button
                               type="button"
-                              onClick={() => {
-                                setUploadedFiles((prev) =>
-                                  prev.map((file) => ({
-                                    ...file,
-                                    file:
-                                      file.file && typeof file.file === 'object' && 'name' in file.file
-                                        ? Object.assign(file.file, {
-                                            name: tempFileName,
-                                          })
-                                        : file.file,
-                                  }))
-                                );
-                                setIsRenaming(false);
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
                               }}
-                              className="ml-3 text-green-600 hover:text-green-700 font-sans font-medium"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                
+                                console.log("Done button clicked", { tempFileName, isRenaming });
+                                
+                                const currentTempFileName = tempFileName;
+                                
+                                const currentDisplayName = uploadedFiles[0]?.displayName || uploadedFiles[0]?.file?.name || "creative.html";
+                                if (currentTempFileName !== currentDisplayName) {
+                                  setUploadedFiles((prev) =>
+                                    prev.map((file) => ({
+                                      ...file,
+                                      displayName: currentTempFileName,
+                                    }))
+                                  );
+                                }
+                                
+                                // Exit edit mode
+                                setIsRenaming(false);
+                                setTempFileName("");
+                              }}
+                              className="ml-3 text-green-600 hover:text-green-700 font-sans font-medium relative z-30"
                             >
                               Done
                             </button>
@@ -1857,24 +2145,6 @@ export default function CreativeForm() {
                                     HTML Code
                                   </h3>
                                   <div className="flex gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        console.log("HTML Debug Info:", {
-                                          file:
-                                            uploadedFiles[0]?.file?.name ||
-                                            "creative.html",
-                                          isHtml: uploadedFiles[0]?.isHtml,
-                                          previewUrl:
-                                            uploadedFiles[0]?.previewUrl,
-                                          htmlCodeLength: htmlCode.length,
-                                        });
-                                      }}
-                                      className="p-1 rounded hover:bg-gray-200 transition-colors duration-200"
-                                      title="Debug Info"
-                                    >
-                                      🔍
-                                    </button>
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -2036,6 +2306,19 @@ export default function CreativeForm() {
                         <h3 className="text-lg font-semibold mb-3 font-sans">
                           Creative Specific Details
                         </h3>
+                        
+                        <div className="mb-4 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={enhanceWithClaude}
+                            disabled={aiLoading}
+                            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed font-sans font-medium flex items-center gap-2 transition-all duration-300 active:scale-95"
+                          >
+                            <Bot size={20} className="inline-block" />
+                            {aiLoading ? "Generating AI Suggestions..." : "AI Suggest From & Subject Lines"}
+                          </button>
+                        </div>
+                        
                         <div className="grid grid-cols-2 gap-3 mb-6">
                           <textarea
                             placeholder="From Lines"
@@ -2159,9 +2442,11 @@ export default function CreativeForm() {
                                 }}
                               />
                             ) : (
-                              <img
+                              <Image
                                 src={creative.imageUrl}
                                 alt={`Creative ${idx + 1}`}
+                                width={400}
+                                height={300}
                                 className="object-contain max-h-full max-w-full group-hover:scale-105 transition-transform duration-300"
                               />
                             )}
@@ -2283,37 +2568,45 @@ export default function CreativeForm() {
                         isDragOver
                           ? "border-sky-400 bg-sky-50"
                           : "border-gray-300 bg-gray-50 hover:border-sky-400"
-                      } ${isZipProcessing ? "opacity-50 pointer-events-none" : ""}`}
+                      } ${(isZipProcessing || isUploading) ? "opacity-50 pointer-events-none" : ""}`}
                       onClick={() =>
-                        !isZipProcessing &&
+                        !isZipProcessing && !isUploading &&
                         document.getElementById("file-upload")?.click()
                       }
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className={`w-36 h-36 mb-10 transition-colors duration-300 ${
-                          isDragOver ? "text-sky-500" : "text-gray-400"
-                        }`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 12l-4-4m0 0l-4 4m4-4v12"
-                        />
-                      </svg>
+                      {isUploading ? (
+                        <div className="w-36 h-36 mb-10 flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-sky-500"></div>
+                        </div>
+                      ) : (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className={`w-36 h-36 mb-10 transition-colors duration-300 ${
+                            isDragOver ? "text-sky-500" : "text-gray-400"
+                          }`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 12l-4-4m0 0l-4 4m4-4v12"
+                          />
+                        </svg>
+                      )}
                       <p
                         className={`font-sans text-3xl transition-colors duration-300 ${
                           isDragOver ? "text-sky-600" : "text-gray-600"
                         }`}
                       >
-                        {isDragOver
+                        {isUploading
+                          ? "Uploading your creative..."
+                          : isDragOver
                           ? "Drop your files here"
                           : "Click here to upload your Creative"}
                       </p>
@@ -2373,6 +2666,18 @@ export default function CreativeForm() {
                         className="w-full border border-gray-300 rounded-lg p-6 min-h-[400px] font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 resize-none text-base"
                       />
                     </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={enhanceWithClaude}
+                      disabled={aiLoading}
+                      className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed font-sans font-medium flex items-center gap-2 transition-all duration-300 active:scale-95"
+                    >
+                      <Bot size={20} className="inline-block" />
+                      {aiLoading ? "Generating AI Suggestions..." : "AI Suggest From & Subject Lines"}
+                    </button>
                   </div>
 
                   <div className="mt-10 flex justify-end">
