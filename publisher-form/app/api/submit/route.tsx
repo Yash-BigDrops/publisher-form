@@ -122,9 +122,9 @@ export async function POST(request: Request) {
     const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
     const telegramAdminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
 
-      if (telegramBotToken && telegramAdminChatId) {
-        try {
-          const adminMessage = `
+    if (telegramBotToken && telegramAdminChatId && telegramId && telegramId.trim() !== '') {
+      try {
+        const adminMessage = `
 <b>New Submission Received!</b>
 -----------------------------------
 <b>Affiliate ID:</b> ${formData.get("affiliateId")}
@@ -154,6 +154,8 @@ export async function POST(request: Request) {
             exception
           );
         }
+    } else if (telegramBotToken && telegramAdminChatId) {
+      console.log("Telegram notification skipped - no valid Telegram ID provided by user.");
     }
 
     return NextResponse.json({ success: true, url: primaryUrl, trackingLink: trackingLink });
