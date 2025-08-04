@@ -1,6 +1,4 @@
-import { put } from '@vercel/blob';
 import { sql } from '@vercel/postgres';
-import JSZip from 'jszip';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
@@ -10,60 +8,34 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 export async function POST(request: Request) {
   const formData = await request.formData();
   const offerId = formData.get('offerId') as string;
-  const files = formData.getAll('files') as File[];
+  const creativeUrls = formData.getAll('creativeUrls') as string[];
   const contactEmail = formData.get('contactEmail') as string;
 
-  if (!offerId || files.length === 0 || !contactEmail) {
-    return NextResponse.json({ error: 'Offer ID, files, and an email address are required.' }, { status: 400 });
+  if (!offerId || creativeUrls.length === 0 || !contactEmail) {
+    return NextResponse.json({ error: 'Offer ID, creative URLs, and an email address are required.' }, { status: 400 });
   }
 
-  let fileBuffer: Buffer;
-  let fileName: string;
-  let originalFilename: string;
-  let contentType: string;
-
-  if (files.length > 1) {
-    const zip = new JSZip();
-    for (const file of files) {
-      const arrayBuffer = await file.arrayBuffer();
-      zip.file(file.name, arrayBuffer);
-    }
-    fileBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-    fileName = `${offerId}.zip`;
-    originalFilename = `${offerId}.zip`;
-    contentType = 'application/zip';
-  } else {
-    const file = files[0];
-    const arrayBuffer = await file.arrayBuffer();
-    fileBuffer = Buffer.from(arrayBuffer);
-    const extension = file.name.split('.').pop() || 'bin';
-    fileName = `${offerId}.${extension}`;
-    originalFilename = file.name;
-    contentType = file.type;
-  }
+  const primaryUrl = creativeUrls[0];
+  const fileName = `${offerId}_creative`;
+  const originalFilename = `creative_${Date.now()}`;
 
   try {
-    const blob = await put(fileName, fileBuffer, {
-      access: 'public',
-      contentType: contentType,
-      allowOverwrite: true,
-    });
-
     const telegramId = formData.get('telegramId') as string | null;
     const fromLine = formData.get('fromLine') as string | null;
     const subjectLines = formData.get('subjectLines') as string | null;
     const otherRequest = formData.get('otherRequest') as string | null;
+    const priority = formData.get('priority') as string | null;
 
     const submissionResult = await sql`
       INSERT INTO submissions (
         offer_id, file_url, file_key, original_filename, 
         contact_method, contact_info, telegram_chat_id,
-        from_lines, subject_lines, other_request 
+        from_lines, subject_lines, other_request, priority
       )
       VALUES (
-        ${offerId}, ${blob.url}, ${blob.pathname}, ${originalFilename}, 
+        ${offerId}, ${primaryUrl}, ${fileName}, ${originalFilename}, 
         'email', ${contactEmail}, ${telegramId},
-        ${fromLine}, ${subjectLines}, ${otherRequest}
+        ${fromLine}, ${subjectLines}, ${otherRequest}, ${priority}
       )
       RETURNING id;
     `;
@@ -118,6 +90,7 @@ export async function POST(request: Request) {
               <div class="content">
                 <p>Hello ${contactName},</p>
                 <p>Thank you for your submission! We have received your creative and it is now being processed.</p>
+                <p><strong>Priority Level:</strong> ${priority || 'Moderate'}</p>
                 <div class="tracking-link">
                   <strong>Your Tracking Link:</strong><br>
                   <a href="${trackingLink}" style="color: #3b82f6;">${trackingLink}</a>
@@ -146,9 +119,8 @@ export async function POST(request: Request) {
       }
     }
 
-    if (telegramId) {
-      const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
-      const telegramAdminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+    const telegramAdminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
 
       if (telegramBotToken && telegramAdminChatId) {
         try {
@@ -161,6 +133,7 @@ export async function POST(request: Request) {
 <b>Offer ID:</b> ${offerId}
 <b>Email:</b> ${contactEmail}
 <b>Telegram:</b> ${telegramId}
+<b>Priority:</b> ${priority || "Not specified"}
 -----------------------------------
 <b>Tracking Link:</b> ${trackingLink}
           `;
@@ -181,10 +154,9 @@ export async function POST(request: Request) {
             exception
           );
         }
-      }
     }
 
-    return NextResponse.json({ success: true, url: blob.url, trackingLink: trackingLink });
+    return NextResponse.json({ success: true, url: primaryUrl, trackingLink: trackingLink });
 
   } catch (error) {
     console.error('Error during submission:', error);
