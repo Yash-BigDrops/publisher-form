@@ -1313,7 +1313,7 @@ export default function CreativeForm() {
                     </div>
                   </div>
 
-                  {multiCreatives.length > 0 && (
+                  {multiCreatives.length > 0 && formData.creativeType === "Email" && (
                     <button
                       type="button"
                       onClick={() => openModal("From & Subject Lines")}
@@ -1347,16 +1347,18 @@ export default function CreativeForm() {
                       Multiple Creatives
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => openModal("From & Subject Lines")}
-                    className="flex-1 h-12 sm:h-14 border border-gray-300 rounded-lg px-3 sm:px-4 flex items-center justify-center gap-2 hover:bg-sky-50 transition-all duration-300 hover:border-sky-300"
-                  >
-                    <FileArchive className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
-                    <span className="text-sm sm:text-base">
-                      From & Subject Lines
-                    </span>
-                  </button>
+                  {formData.creativeType === "Email" && (
+                    <button
+                      type="button"
+                      onClick={() => openModal("From & Subject Lines")}
+                      className="flex-1 h-12 sm:h-14 border border-gray-300 rounded-lg px-3 sm:px-4 flex items-center justify-center gap-2 hover:bg-sky-50 transition-all duration-300 hover:border-sky-300"
+                    >
+                      <FileArchive className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
+                      <span className="text-sm sm:text-base">
+                        From & Subject Lines
+                      </span>
+                    </button>
+                  )}
                 </div>
               )}
 
