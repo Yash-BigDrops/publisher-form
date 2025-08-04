@@ -1,19 +1,20 @@
-import { put } from "@vercel/blob";
 import imageCompression from "browser-image-compression";
 
 export async function uploadToBlob(file: File) {
   try {
-    const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const fileExtension = file.name.split('.').pop();
-    const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-    const uniqueFileName = `${fileNameWithoutExt}_${timestamp}_${randomSuffix}.${fileExtension}`;
+    const formData = new FormData();
+    formData.append("file", file);
 
-    const { url } = await put(uniqueFileName, file, {
-      access: "public",
-      contentType: file.type,
+    const response = await fetch("/api/upload-url", {
+      method: "POST",
+      body: formData,
     });
 
+    if (!response.ok) {
+      throw new Error("Failed to upload file");
+    }
+
+    const { url } = await response.json();
     return url;
   } catch (error) {
     console.error("Upload error:", error);

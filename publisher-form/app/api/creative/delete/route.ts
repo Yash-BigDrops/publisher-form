@@ -1,27 +1,23 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs/promises";
-
-const permanentDir = path.join(process.cwd(), "public", "creatives");
+import { del } from "@vercel/blob";
 
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const { fileName } = data;
+    const { fileUrl } = data;
 
-    if (!fileName) {
-      return NextResponse.json({ error: "No file name provided" }, { status: 400 });
+    if (!fileUrl) {
+      return NextResponse.json({ error: "No file URL provided" }, { status: 400 });
     }
 
-    const filePath = path.join(permanentDir, fileName);
-    const previewPath = path.join(permanentDir, `preview-${fileName}.jpg`);
+    // Extract the blob path from the URL
+    const url = new URL(fileUrl);
+    const blobPath = url.pathname.substring(1); // Remove leading slash
 
-    await Promise.all([
-      fs.unlink(filePath).catch(() => {}),
-      fs.unlink(previewPath).catch(() => {})
-    ]);
+    // Delete from Vercel Blob
+    await del(blobPath);
 
-    console.log("Deleted creative:", fileName);
+    console.log("Deleted creative from blob:", blobPath);
 
     return NextResponse.json({ 
       success: true,

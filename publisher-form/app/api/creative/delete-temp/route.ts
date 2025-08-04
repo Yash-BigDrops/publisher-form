@@ -1,25 +1,21 @@
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs/promises";
-
-const tempDir = path.join(process.cwd(), "public", "temp-uploads");
+import { del } from "@vercel/blob";
 
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const fileKey = searchParams.get("fileKey");
+    const fileUrl = searchParams.get("fileUrl");
 
-    if (!fileKey) {
-      return NextResponse.json({ error: "No file key provided" }, { status: 400 });
+    if (!fileUrl) {
+      return NextResponse.json({ error: "No file URL provided" }, { status: 400 });
     }
 
-    const filePath = path.join(tempDir, fileKey);
-    const previewPath = path.join(tempDir, `preview-${fileKey}.jpg`);
+    // Extract the blob path from the URL
+    const url = new URL(fileUrl);
+    const blobPath = url.pathname.substring(1); // Remove leading slash
 
-    await Promise.all([
-      fs.unlink(filePath).catch(() => {}),
-      fs.unlink(previewPath).catch(() => {}),
-    ]);
+    // Delete from Vercel Blob
+    await del(blobPath);
 
     return NextResponse.json({ success: true });
   } catch (error) {
