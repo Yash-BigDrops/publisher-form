@@ -644,10 +644,16 @@ export default function CreativeForm() {
     setUploadedCreative(null);
     setTempFileKey(null);
 
-    try {
-      const originalUrl = await uploadToBlob(file);
-      let previewUrl = originalUrl;
+    // Show processing message immediately for ZIP files
+    if (file.name.toLowerCase().endsWith(".zip")) {
+      setIsZipProcessing(true);
+      setZipError(null);
+    }
 
+    try {
+      // Start upload in background for all files
+      const uploadPromise = uploadToBlob(file);
+      
       if (
         file.type === "text/html" ||
         file.name.toLowerCase().endsWith(".html")
@@ -662,83 +668,86 @@ export default function CreativeForm() {
 
         const blob = new Blob([processedHtml], { type: "text/html" });
         const htmlUrl = URL.createObjectURL(blob);
+        
+        // Wait for upload to complete
+        const originalUrl = await uploadPromise;
         setUploadedFiles([{ file, previewUrl: htmlUrl, originalUrl, isHtml: true }]);
       } else if (file.name.toLowerCase().endsWith(".zip")) {
-      setIsZipProcessing(true);
-      setZipError(null);
+        try {
+          const creativesFound = await extractCreativesFromZip(file);
 
-      try {
-        const creativesFound = await extractCreativesFromZip(file);
-
-        if (creativesFound.length === 0) {
-          setZipError("No valid creatives found in ZIP or nested ZIPs.");
-          setIsZipProcessing(false);
-          return;
-        }
-
-        console.log("ZIP processing results:", creativesFound);
-
-        if (uploadType === "multiple") {
-          const creatives = creativesFound.map((c, idx) => ({
-            id: idx,
-            type: c.type,
-            imageUrl: c.url,
-            fromLine: "",
-            subjectLine: "",
-            notes: "",
-            htmlContent: c.htmlContent || "",
-          }));
-          setMultiCreatives(creatives);
-          setOriginalZipFileName(file.name);
-          setTempFileKey(originalUrl);
-        } else {
-          const firstHtml = creativesFound.find((c) => c.type === "html");
-          console.log("First HTML found:", firstHtml);
-
-          if (firstHtml) {
-            const htmlContent = firstHtml.htmlContent || "";
-            console.log("Processing HTML creative:", {
-              hasContent: !!htmlContent,
-              contentLength: htmlContent.length,
-              containsImages: htmlContent.includes("data:image"),
-              containsCSS: htmlContent.includes("<style"),
-            });
-
-            const blob = new Blob([htmlContent], { type: "text/html" });
-            const htmlBlobUrl = URL.createObjectURL(blob);
-            console.log("Created HTML blob URL:", htmlBlobUrl);
-
-            setHtmlCode(htmlContent);
-            setUploadedFiles([{ file, previewUrl: htmlBlobUrl, originalUrl, isHtml: true }]);
-            console.log("📝 Updated htmlCode state with processed HTML");
-            console.log("📝 htmlCode length:", htmlContent.length);
-            console.log(
-              "📝 htmlCode contains data:image:",
-              htmlContent.includes("data:image")
-            );
-            console.log(
-              "📝 htmlCode contains blob:",
-              htmlContent.includes("blob:")
-            );
-            console.log(
-              "📝 First 500 chars of htmlCode:",
-              htmlContent.substring(0, 500)
-            );
-            console.log(
-              "📝 Sample img tags in htmlCode:",
-              htmlContent.match(/<img[^>]+>/g)?.slice(0, 3)
-            );
-          } else {
-            const firstImg = creativesFound.find((c) => c.type === "image");
-            if (firstImg) {
-              setUploadedFiles([
-                { file, previewUrl: firstImg.url, originalUrl, isHtml: false },
-              ]);
-            }
+          if (creativesFound.length === 0) {
+            setZipError("No valid creatives found in ZIP or nested ZIPs.");
+            setIsZipProcessing(false);
+            return;
           }
-          setTempFileKey(originalUrl);
-        }
-      } catch (err) {
+
+          console.log("ZIP processing results:", creativesFound);
+
+          // Wait for upload to complete
+          const originalUrl = await uploadPromise;
+
+          if (uploadType === "multiple") {
+            const creatives = creativesFound.map((c, idx) => ({
+              id: idx,
+              type: c.type,
+              imageUrl: c.url,
+              fromLine: "",
+              subjectLine: "",
+              notes: "",
+              htmlContent: c.htmlContent || "",
+            }));
+            setMultiCreatives(creatives);
+            setOriginalZipFileName(file.name);
+            setTempFileKey(originalUrl);
+          } else {
+            const firstHtml = creativesFound.find((c) => c.type === "html");
+            console.log("First HTML found:", firstHtml);
+
+            if (firstHtml) {
+              const htmlContent = firstHtml.htmlContent || "";
+              console.log("Processing HTML creative:", {
+                hasContent: !!htmlContent,
+                contentLength: htmlContent.length,
+                containsImages: htmlContent.includes("data:image"),
+                containsCSS: htmlContent.includes("<style"),
+              });
+
+              const blob = new Blob([htmlContent], { type: "text/html" });
+              const htmlBlobUrl = URL.createObjectURL(blob);
+              console.log("Created HTML blob URL:", htmlBlobUrl);
+
+              setHtmlCode(htmlContent);
+              setUploadedFiles([{ file, previewUrl: htmlBlobUrl, originalUrl, isHtml: true }]);
+              console.log("📝 Updated htmlCode state with processed HTML");
+              console.log("📝 htmlCode length:", htmlContent.length);
+              console.log(
+                "📝 htmlCode contains data:image:",
+                htmlContent.includes("data:image")
+              );
+              console.log(
+                "📝 htmlCode contains blob:",
+                htmlContent.includes("blob:")
+              );
+              console.log(
+                "📝 First 500 chars of htmlCode:",
+                htmlContent.substring(0, 500)
+              );
+              console.log(
+                "📝 Sample img tags in htmlCode:",
+                htmlContent.match(/<img[^>]+>/g)?.slice(0, 3)
+              );
+            } else {
+              const firstImg = creativesFound.find((c) => c.type === "image");
+              if (firstImg) {
+                setUploadedFiles([
+                  { file, previewUrl: firstImg.url, originalUrl, isHtml: false },
+                ]);
+              }
+            }
+            setTempFileKey(originalUrl);
+          }
+        } catch (err) {
         console.error("Error processing ZIP file:", err);
         setZipError(
           err instanceof Error
@@ -749,6 +758,9 @@ export default function CreativeForm() {
 
       setIsZipProcessing(false);
     } else if (isImageFile(file)) {
+      const originalUrl = await uploadPromise;
+      
+      let previewUrl: string;
       if (file.type.startsWith("image/")) {
         const compressed = await createCompressedPreview(file);
         previewUrl = URL.createObjectURL(compressed);
@@ -758,6 +770,7 @@ export default function CreativeForm() {
       setUploadedFiles([{ file, previewUrl, originalUrl, isHtml: false }]);
       setTempFileKey(originalUrl);
     } else {
+      const originalUrl = await uploadPromise;
       setUploadedFiles([{ file, previewUrl: null, originalUrl }]);
       setTempFileKey(originalUrl);
     }
@@ -860,6 +873,8 @@ export default function CreativeForm() {
       const creativeData = {
         offerId: formData.offerId,
         creativeType: formData.creativeType,
+        fromLine,
+        subjectLines,
         multiCreatives,
         fileUrl: tempFileKey,
       };
@@ -1302,7 +1317,7 @@ export default function CreativeForm() {
                     </div>
                   </div>
 
-                  {multiCreatives.length > 0 && formData.creativeType === "Email" && (
+                  {multiCreatives.length > 0 && formData.creativeType.toLowerCase() === "email" && (
                     <button
                       type="button"
                       onClick={() => openModal("From & Subject Lines")}
@@ -1336,7 +1351,7 @@ export default function CreativeForm() {
                       Multiple Creatives
                     </span>
                   </button>
-                  {formData.creativeType === "Email" && (
+                  {formData.creativeType.toLowerCase() === "email" && (
                     <button
                       type="button"
                       onClick={() => openModal("From & Subject Lines")}
@@ -1718,7 +1733,7 @@ export default function CreativeForm() {
                                   prev.map((file) => ({
                                     ...file,
                                     file:
-                                      file.file instanceof File
+                                      file.file && typeof file.file === 'object' && 'name' in file.file
                                         ? Object.assign(file.file, {
                                             name: tempFileName,
                                           })
@@ -1733,7 +1748,7 @@ export default function CreativeForm() {
                                     prev.map((file) => ({
                                       ...file,
                                       file:
-                                        file.file instanceof File
+                                        file.file && typeof file.file === 'object' && 'name' in file.file
                                           ? Object.assign(file.file, {
                                               name: tempFileName,
                                             })
@@ -1761,20 +1776,42 @@ export default function CreativeForm() {
                             </span>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const input = document.getElementById(
-                                "modal-file-upload"
-                              ) as HTMLInputElement;
-                              if (input) {
-                                input.click();
-                              }
-                            }}
-                            className="ml-3 text-sky-500 hover:text-sky-600 font-sans"
-                          >
-                            Edit
-                          </button>
+                          {!isRenaming ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTempFileName(
+                                  uploadedFiles[0]?.file?.name ||
+                                    "creative.html"
+                                );
+                                setIsRenaming(true);
+                              }}
+                              className="ml-3 text-sky-500 hover:text-sky-600 font-sans"
+                            >
+                              Edit
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUploadedFiles((prev) =>
+                                  prev.map((file) => ({
+                                    ...file,
+                                    file:
+                                      file.file && typeof file.file === 'object' && 'name' in file.file
+                                        ? Object.assign(file.file, {
+                                            name: tempFileName,
+                                          })
+                                        : file.file,
+                                  }))
+                                );
+                                setIsRenaming(false);
+                              }}
+                              className="ml-3 text-green-600 hover:text-green-700 font-sans font-medium"
+                            >
+                              Done
+                            </button>
+                          )}
                         </p>
                         <p className="text-sm mb-1">
                           <strong>Size:</strong>{" "}
