@@ -41,4 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# uploaded files (should not be deployed)
+/public/temp-uploads/
+/public/creatives/
+/ngrok.exe
