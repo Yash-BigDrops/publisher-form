@@ -397,6 +397,8 @@ export default function CreativeForm() {
 
   const [fromLine, setFromLine] = useState("");
   const [subjectLines, setSubjectLines] = useState("");
+  const [modalFromLine, setModalFromLine] = useState("");
+  const [modalSubjectLines, setModalSubjectLines] = useState("");
   const [creativeNotes, setCreativeNotes] = useState("");
   const [uploadedCreative, setUploadedCreative] = useState<null | {
     name: string;
@@ -1859,7 +1861,7 @@ export default function CreativeForm() {
               <>
                 {uploadType === "single" && uploadedFiles.length > 0 ? (
                   <div className="flex flex-col lg:flex-row gap-6">
-                                      <div className="lg:w-5/12 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex items-center justify-center p-2 max-h-[85vh] relative">
+                                      <div className="lg:w-7/12 border border-gray-200 rounded-lg overflow-hidden bg-white shadow-sm flex items-center justify-center p-2 max-h-[90vh] relative">
                     {uploadedFiles[0].previewUrl ? (
                       <div className="relative group w-full h-full">
                         {/* Maximize Button */}
@@ -1883,7 +1885,7 @@ export default function CreativeForm() {
                           {uploadedFiles[0].isHtml ? (
                             <iframe
                               src={uploadedFiles[0].previewUrl || ""}
-                              className="w-full min-h-[600px] border-0 bg-white"
+                              className="w-[95%] min-h-[900px] border-0 bg-white mx-auto"
                               sandbox="allow-scripts allow-same-origin"
                               title="HTML Creative Preview"
                             />
@@ -2307,32 +2309,19 @@ export default function CreativeForm() {
                           Creative Specific Details
                         </h3>
                         
-                        <div className="mb-4 flex justify-center">
+
+                        
+                        {formData.creativeType.toLowerCase() === "email" && (
                           <button
                             type="button"
-                            onClick={enhanceWithClaude}
-                            disabled={aiLoading}
-                            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed font-sans font-medium flex items-center gap-2 transition-all duration-300 active:scale-95"
+                            onClick={() => openModal("From & Subject Lines")}
+                            className="flex items-center justify-center gap-2 w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg 
+                                       hover:border-sky-400 hover:bg-sky-50 transition-all duration-300 font-sans text-sm sm:text-base text-gray-800 mb-6"
                           >
-                            <Bot size={20} className="inline-block" />
-                            {aiLoading ? "Generating AI Suggestions..." : "AI Suggest From & Subject Lines"}
+                            <FileArchive className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
+                            <span>From & Subject Lines</span>
                           </button>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-3 mb-6">
-                          <textarea
-                            placeholder="From Lines"
-                            value={fromLine}
-                            onChange={(e) => setFromLine(e.target.value)}
-                            className="border border-gray-300 rounded-lg p-3 min-h-[80px] font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 resize-none"
-                          />
-                          <textarea
-                            placeholder="Subject Lines"
-                            value={subjectLines}
-                            onChange={(e) => setSubjectLines(e.target.value)}
-                            className="border border-gray-300 rounded-lg p-3 min-h-[80px] font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 resize-none"
-                          />
-                        </div>
+                        )}
 
                         <h3 className="text-lg font-semibold mb-3 font-sans">
                           Any Notes For This Creative
@@ -2356,8 +2345,8 @@ export default function CreativeForm() {
                             const creativeData = {
                               offerId: formData.offerId,
                               creativeType: formData.creativeType,
-                              fromLine,
-                              subjectLines,
+                              fromLine: modalFromLine,
+                              subjectLines: modalSubjectLines,
                               notes: creativeNotes,
                               fileUrl: tempFileKey,
                             };
@@ -2649,8 +2638,8 @@ export default function CreativeForm() {
                       </label>
                       <textarea
                         placeholder="Enter your from lines here..."
-                        value={fromLine}
-                        onChange={(e) => setFromLine(e.target.value)}
+                        value={uploadType ? modalFromLine : fromLine}
+                        onChange={(e) => uploadType ? setModalFromLine(e.target.value) : setFromLine(e.target.value)}
                         className="w-full border border-gray-300 rounded-lg p-6 min-h-[400px] font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 resize-none text-base"
                       />
                     </div>
@@ -2661,8 +2650,8 @@ export default function CreativeForm() {
                       </label>
                       <textarea
                         placeholder="Enter your subject lines here..."
-                        value={subjectLines}
-                        onChange={(e) => setSubjectLines(e.target.value)}
+                        value={uploadType ? modalSubjectLines : subjectLines}
+                        onChange={(e) => uploadType ? setModalSubjectLines(e.target.value) : setSubjectLines(e.target.value)}
                         className="w-full border border-gray-300 rounded-lg p-6 min-h-[400px] font-sans text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-300 hover:border-sky-300 focus:border-sky-400 resize-none text-base"
                       />
                     </div>
@@ -2683,11 +2672,16 @@ export default function CreativeForm() {
                   <div className="mt-10 flex justify-end">
                     <button
                       onClick={() => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          fromLine: fromLine,
-                          subjectLines: subjectLines,
-                        }));
+                        if (uploadType) {
+                          setModalFromLine(modalFromLine);
+                          setModalSubjectLines(modalSubjectLines);
+                        } else {
+                          setFormData((prev) => ({
+                            ...prev,
+                            fromLine: fromLine,
+                            subjectLines: subjectLines,
+                          }));
+                        }
                         closeModal();
                       }}
                       className="bg-sky-400 hover:bg-sky-500 active:bg-sky-600 text-white font-sans font-medium py-4 px-8 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 active:scale-95 text-lg"
