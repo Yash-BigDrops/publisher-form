@@ -1,6 +1,6 @@
 
 
-import CreativeForm from "@/components/creative_form";
+import CreativeForm from "@/components/CreativeForm";
 
 export default function HomePage() {
   return (
