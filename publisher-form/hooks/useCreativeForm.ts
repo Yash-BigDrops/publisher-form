@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CreativeFormData, UploadedFile, MultiCreative, TelegramCheckStatus, Priority, UploadType } from "@/types/creative";
+import { CreativeFormData, UploadedFile, MultiCreative, TelegramCheckStatus, TelegramCheckResponse, Priority, UploadType } from "@/types/creative";
 import { validateFormData } from "@/utils/validation";
 import { fetchOffers, checkTelegramUser, getClaudeSuggestions, saveCreative, saveMultipleCreatives, deleteCreative, submitForm } from "@/services/api";
 import { extractCreativeText } from "@/lib/ocrHelpers";
@@ -96,10 +96,20 @@ export const useCreativeForm = () => {
 
     try {
       const data = await checkTelegramUser(cleanUsername);
+      console.log("Telegram check response:", data);
+      
       if (data.started) {
         setTelegramCheckStatus("ok");
+        // Show success message
+        if (data.message) {
+          console.log("Telegram success:", data.message);
+        }
       } else {
         setTelegramCheckStatus("not_started");
+        // Show error message
+        if (data.message) {
+          console.log("Telegram error:", data.message);
+        }
       }
     } catch (err) {
       console.error("Telegram check failed", err);

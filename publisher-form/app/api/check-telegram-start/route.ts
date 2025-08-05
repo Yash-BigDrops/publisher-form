@@ -19,7 +19,10 @@ export async function POST(request: NextRequest) {
 
     if (result.rows.length === 0) {
       console.log(`User @${cleanUsername} not found in database - needs to start bot`);
-      return NextResponse.json({ started: false });
+      return NextResponse.json({ 
+        started: false, 
+        message: `User @${cleanUsername} not found. Please start the bot first by sending /start to @BigDropsMarketingBot` 
+      });
     }
 
     const user = result.rows[0];
@@ -44,10 +47,13 @@ export async function POST(request: NextRequest) {
     console.log("Telegram sendMessage response:", msgData);
 
     if (msgData.ok) {
-      return NextResponse.json({ started: true });
+      return NextResponse.json({ started: true, message: "Telegram connection verified successfully!" });
     } else {
       console.log("sendMessage failed:", msgData.description);
-      return NextResponse.json({ started: false });
+      return NextResponse.json({ 
+        started: false, 
+        message: `Failed to send test message: ${msgData.description}` 
+      });
     }
 
   } catch (err) {

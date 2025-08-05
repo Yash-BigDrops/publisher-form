@@ -1,4 +1,4 @@
-import { CreativeFormData, MultiCreative } from "@/types/creative";
+import { CreativeFormData, MultiCreative, TelegramCheckResponse } from "@/types/creative";
 
 export const fetchOffers = async (): Promise<string[]> => {
   try {
@@ -11,7 +11,7 @@ export const fetchOffers = async (): Promise<string[]> => {
   }
 };
 
-export const checkTelegramUser = async (username: string): Promise<{ started: boolean }> => {
+export const checkTelegramUser = async (username: string): Promise<TelegramCheckResponse> => {
   try {
     const res = await fetch("/api/check-telegram-start", {
       method: "POST",
@@ -21,7 +21,7 @@ export const checkTelegramUser = async (username: string): Promise<{ started: bo
     return await res.json();
   } catch (error) {
     console.error("Telegram check failed", error);
-    return { started: false };
+    return { started: false, message: "Failed to check Telegram user" };
   }
 };
 

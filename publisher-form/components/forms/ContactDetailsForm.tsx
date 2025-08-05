@@ -53,14 +53,19 @@ export default function ContactDetailsForm({
           <button
             type="button"
             onClick={handleTelegramBlur}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 bg-sky-500 text-white rounded-md hover:bg-sky-600 transition-all text-sm font-medium"
+            disabled={telegramCheckStatus === "checking"}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all text-sm font-medium"
           >
-            Check
+            {telegramCheckStatus === "checking" ? "Checking..." : "Check"}
           </button>
         </div>
 
         {telegramCheckStatus === "checking" && (
           <p className="text-gray-500 text-sm mt-1">Checking Telegram connection...</p>
+        )}
+
+        {telegramCheckStatus === "unchecked" && formData.telegramId.trim() && (
+          <p className="text-gray-500 text-sm mt-1">Click &quot;Check&quot; to verify your Telegram connection</p>
         )}
 
         {telegramCheckStatus === "not_started" && (
@@ -72,18 +77,27 @@ export default function ContactDetailsForm({
                 Please follow these steps:
               </p>
               <ol className="text-xs text-yellow-700 mt-1 ml-4 list-decimal">
-                <li>Click the link below to open our bot</li>
+                <li>Click the &quot;Start Bot&quot; button below to open our bot</li>
                 <li>Send <code className="bg-yellow-100 px-1 rounded">/start</code> to the bot</li>
-                <li>Come back and try again</li>
+                <li>Come back and click &quot;Check&quot; again</li>
               </ol>
-              <a
-                href={TELEGRAM_BOT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-sky-600 underline mt-2 inline-block"
-              >
-                Open @BigDropsMarketingBot
-              </a>
+              <div className="flex gap-2 mt-3">
+                <a
+                  href={TELEGRAM_BOT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors text-sm font-medium"
+                >
+                  Start Bot
+                </a>
+                <button
+                  type="button"
+                  onClick={handleTelegramBlur}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
+                >
+                  Check Again
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -96,6 +110,13 @@ export default function ContactDetailsForm({
               <p className="text-xs text-green-700 mt-0.5">
                 You&apos;ll receive notifications on Telegram when your submission is processed.
               </p>
+              <button
+                type="button"
+                onClick={handleTelegramBlur}
+                className="text-xs text-sky-600 underline mt-1 hover:text-sky-700"
+              >
+                Re-check connection
+              </button>
             </div>
           </div>
         )}

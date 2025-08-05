@@ -40,6 +40,11 @@ export type CreativeFormData = {
 
 export type TelegramCheckStatus = "unchecked" | "checking" | "ok" | "not_started";
 
+export type TelegramCheckResponse = {
+  started: boolean;
+  message?: string;
+};
+
 export type Priority = "High" | "Moderate";
 
 export type UploadType = null | "single" | "multiple"; 
