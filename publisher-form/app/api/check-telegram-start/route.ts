@@ -6,10 +6,31 @@ export async function POST(request: NextRequest) {
     const { username } = await request.json();
     
     if (!username) {
-      return NextResponse.json({ started: false });
+      return NextResponse.json({ started: false, message: "No username provided" });
     }
 
     const cleanUsername = username.trim().replace(/^@/, '');
+    console.log(`Checking Telegram user: @${cleanUsername}`);
+
+    // First, let's check if the table exists
+    const tableCheck = await sql`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'telegram_users'
+      );
+    `;
+    
+    const tableExists = tableCheck.rows[0]?.exists;
+    console.log(`telegram_users table exists: ${tableExists}`);
+    
+    if (!tableExists) {
+      console.log('telegram_users table does not exist');
+      return NextResponse.json({ 
+        started: false, 
+        message: "Database table not found. Please contact support." 
+      });
+    }
 
     const result = await sql`
       SELECT chat_id, first_name 
@@ -17,8 +38,20 @@ export async function POST(request: NextRequest) {
       WHERE username = ${cleanUsername}
     `;
 
+    console.log(`Database query result for @${cleanUsername}:`, result.rows);
+
     if (result.rows.length === 0) {
       console.log(`User @${cleanUsername} not found in database - needs to start bot`);
+      
+      // Let's also check what users are in the database
+      const allUsers = await sql`
+        SELECT username, chat_id, first_name, created_at
+        FROM telegram_users
+        ORDER BY created_at DESC
+        LIMIT 5
+      `;
+      console.log('Recent users in database:', allUsers.rows);
+      
       return NextResponse.json({ 
         started: false, 
         message: `User @${cleanUsername} not found. Please start the bot first by sending /start to @BigDropsMarketingBot` 
