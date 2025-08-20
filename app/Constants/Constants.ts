@@ -195,13 +195,13 @@ export const Constants = {
         },
         fromLines: {
             label: "From Lines *",
-            placeholder: "Enter from lines (e.g., sender names, email addresses)\nExample:\nJohn Smith <john@company.com>\nMarketing Team <marketing@company.com>",
+            placeholder: "Enter from lines",
             helpText: "Enter multiple from lines separated by line breaks. Each line will be used as an option.",
             required: true
         },
         subjectLines: {
             label: "Subject Lines *",
-            placeholder: "Enter compelling subject lines\nExample:\nDon't miss out on this amazing offer!\nLimited time: 50% off everything\nYou won't believe what's inside...",
+            placeholder: "Enter subject lines",
             helpText: "Enter multiple subject lines separated by line breaks. Each line will be used as an option.",
             required: true
         },
@@ -214,4 +214,10 @@ export const Constants = {
             subjectLines: "Subject Lines: {count} characters"
         }
     },
+
+    // Prority
+    priorityLevels: [
+        { name: "High", value: "high" },
+        { name: "Medium", value: "medium" },
+    ]
 } 

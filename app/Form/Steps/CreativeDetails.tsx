@@ -17,6 +17,7 @@ const CreativeDetails = () => {
     additionalNotes: '',
     fromLines: '',
     subjectLines: '',
+    priority: 'medium', // Default to medium (from constants)
   })
   
   const [offerSearchTerm, setOfferSearchTerm] = useState('')
@@ -172,6 +173,14 @@ const CreativeDetails = () => {
       subjectLines: ''
     }))
     setHasFromSubjectLines(false)
+  }
+  
+  // Handle priority change
+  const handlePriorityChange = (priority: string) => {
+    setFormData(prev => ({
+      ...prev,
+      priority
+    }))
   }
   
   // Separate fields by type for proper ordering
@@ -387,6 +396,26 @@ const CreativeDetails = () => {
             )}
           </div>
         )}
+      </div>
+      
+      {/* Priority Toggle */}
+      <div className="space-y-3">
+        <Label className="text-base font-medium text-gray-700">Set Priority</Label>
+        <div className="flex bg-white border border-gray-300 rounded-lg p-1 w-fit shadow-sm">
+          {Constants.priorityLevels.map((priority) => (
+            <button
+              key={priority.value}
+              onClick={() => handlePriorityChange(priority.value)}
+              className={`px-6 py-2.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                formData.priority === priority.value
+                  ? 'bg-blue-400 text-white shadow-sm border border-blue-400'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+              }`}
+            >
+              {priority.name}
+            </button>
+          ))}
+        </div>
       </div>
       
       {/* Textarea Fields (Additional Notes) */}
