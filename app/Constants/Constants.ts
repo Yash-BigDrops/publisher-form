@@ -1,37 +1,3 @@
-/*
- * TODO: BACKEND INTEGRATION - EVERFLOW API INTEGRATION
- * 
- * The following sections need to be integrated with Everflow API:
- * 
- * 1. OFFER DATA:
- *    - Current offer options are placeholders for frontend development
- *    - Backend should implement API endpoint to fetch offers from Everflow
- *    - API endpoint: GET /api/everflow/offers
- *    - Expected response format: Array of { label: string, value: string }
- *    - Consider implementing caching for better performance
- * 
- * 2. OFFER SEARCH:
- *    - Frontend search is already implemented and ready for backend integration
- *    - Search filtering can be moved to backend for better performance with large datasets
- *    - Consider implementing server-side search with pagination
- * 
- * 3. AUTHENTICATION:
- *    - Ensure Everflow API credentials are properly secured
- *    - Implement proper error handling for API failures
- *    - Add rate limiting to prevent API abuse
- * 
- * 4. ERROR HANDLING:
- *    - Handle cases when Everflow API is unavailable
- *    - Provide fallback options or graceful degradation
- *    - Log errors for monitoring and debugging
- * 
- * 5. PERFORMANCE:
- *    - Implement offer data caching (Redis recommended)
- *    - Consider lazy loading for large offer lists
- *    - Add loading states and skeleton screens
- * 
- * Frontend is ready and will automatically work once backend provides the API endpoint.
- */
 
 export const Constants = {
     logo: "/Logo.svg",
@@ -84,9 +50,6 @@ export const Constants = {
             name: "offerId",
             type: "select",
             options: [
-                // TODO: BACKEND INTEGRATION - Replace with Everflow API data
-                // These are placeholder offers for frontend development only
-                // Backend should fetch real offers from Everflow API endpoint
                 { label: "Loading offers...", value: "loading" },
             ],
             placeholder: "Select Offer",

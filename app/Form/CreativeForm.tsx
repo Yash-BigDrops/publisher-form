@@ -10,12 +10,101 @@ import PersonalDetails from '@/app/Form/Steps/PersonalDetails'
 import ContactDetails from '@/app/Form/Steps/ContactDetails'
 import CreativeDetails from '@/app/Form/Steps/CreativeDetails'
 
+type FileMeta = { 
+  id: string; 
+  name: string; 
+  url: string; 
+  size: number; 
+  type: string; 
+  source?: 'single'|'zip'; 
+  html?: boolean 
+};
+
 const CreativeForm = () => {
   const [currentStep, setCurrentStep] = useState(1)
+  
+  const [files, setFiles] = useState<FileMeta[]>([])
+  
+  const [formData, setFormData] = useState({
+    affiliateId: '',
+    companyName: '',
+    firstName: '',
+    lastName: '',
+    
+    // Contact Details
+    email: '',
+    telegramId: '',
+    
+    // Creative Details
+    offerId: '',
+    creativeType: '',
+    additionalNotes: '',
+    fromLines: '',
+    subjectLines: '',
+    priority: 'medium',
+    
+    // Files (will be populated by upload handlers)
+    uploadedFiles: [] as Array<{
+      fileId: string;
+      fileName: string;
+      fileUrl: string;
+      fileSize: number;
+      fileType: string;
+    }>
+  })
+  
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleNext = () => {
     if (currentStep < Constants.totalSteps) {
       setCurrentStep(currentStep + 1)
+    }
+  }
+  
+  const handleFormDataChange = (stepData: Partial<typeof formData>) => {
+    setFormData(prev => ({ ...prev, ...stepData }))
+  }
+  
+  const handleSubmit = async () => {
+    if (currentStep !== Constants.totalSteps) return
+    
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('/api/creative/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          affiliateId: formData.affiliateId,
+          companyName: formData.companyName,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          telegramId: formData.telegramId,
+          offerId: formData.offerId,
+          creativeType: formData.creativeType,
+          fromLines: formData.fromLines,
+          subjectLines: formData.subjectLines,
+          notes: formData.additionalNotes,
+          priority: formData.priority,
+          files: files.map(f => ({
+            fileName: f.name,
+            fileUrl: f.url,
+            fileType: f.type,
+            fileSize: f.size
+          }))
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Creative saved successfully:', result)
+      } else {
+        throw new Error('Failed to save creative')
+      }
+    } catch (error) {
+      console.error('Submission failed:', error)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -29,16 +118,26 @@ const CreativeForm = () => {
     switch (currentStep) {
       case 1:
         return (
-          <PersonalDetails />
+          <PersonalDetails 
+            formData={formData}
+            onDataChange={handleFormDataChange}
+          />
         )
       case 2:
         return (
-          <ContactDetails />
+          <ContactDetails 
+            formData={formData}
+            onDataChange={handleFormDataChange}
+          />
         )
-      case 3:
-        return (
-          <CreativeDetails />
-        )
+              case 3:
+          return (
+            <CreativeDetails 
+              formData={formData}
+              onDataChange={handleFormDataChange}
+              onFilesChange={setFiles}
+            />
+          )
       default:
         return <div>Step not found</div>
     }
@@ -97,10 +196,10 @@ const CreativeForm = () => {
                 )}
                 <Button 
                     className="w-full" 
-                    onClick={handleNext}
-                    disabled={currentStep === Constants.totalSteps}
+                    onClick={currentStep === Constants.totalSteps ? handleSubmit : handleNext}
+                    disabled={isSubmitting}
                 >
-                    {getButtonText().next}
+                    {isSubmitting ? 'Submitting...' : getButtonText().next}
                 </Button>
             </div>
             </CardFooter>
