@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
       // TODO: Generate preview URL for image files
       const fileType = guessType(entry.name);
       const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(entry.name);
-      let previewUrl: string | undefined = undefined;
+      const previewUrl: string | undefined = undefined;
       
       if (isImage) {
         // TODO: Implement thumbnail generation here
