@@ -4,37 +4,11 @@ export const FILE_VALIDATION = {
     ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/html', 'application/zip'],
     MAX_SIZE_MB: Infinity,
     ACCEPT_EXTENSIONS: '.jpg,.jpeg,.png,.gif,.webp,.html,.zip'
-    // TODO: BACKEND INTEGRATION - Client-side validation only
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. These validations are for user experience only
-    // 2. Server-side validation is MANDATORY for security
-    // 3. Implement comprehensive file validation on server
-    // 4. Add file signature validation (magic bytes)
-    // 5. Implement MIME type verification
-    // 6. Add file content analysis
-    // 7. Consider implementing file quarantine system
-    // 8. Add rate limiting per user/IP
-    // 9. Implement file scanning for malware
-    // 10. Add file integrity checks (checksums)
   },
   MULTIPLE_CREATIVES: {
     ALLOWED_TYPES: ['application/zip'],
     MAX_SIZE_MB: Infinity,
     ACCEPT_EXTENSIONS: '.zip'
-    // TODO: BACKEND INTEGRATION - ZIP validation
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. Implement ZIP file structure validation
-    // 2. Add ZIP bomb protection (recursive extraction limits)
-    // 3. Validate ZIP file integrity
-    // 4. Implement file count limits
-    // 5. Add path traversal protection
-    // 6. Implement file size distribution limits
-    // 7. Add ZIP file header validation
-    // 8. Consider implementing ZIP preview
-    // 9. Add support for password-protected ZIPs
-    // 10. Implement ZIP file compression analysis
   }
 }
 

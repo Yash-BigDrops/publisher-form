@@ -163,9 +163,6 @@ export const logError = (error: AppError): void => {
     timestamp: error.timestamp,
     details: error.details
   })
-  
-  // TODO: BACKEND INTEGRATION - Send error to logging service
-  // Example: sendToLoggingService(error)
 }
 
 // User-friendly error messages

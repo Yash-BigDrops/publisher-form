@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { File, FileArchive, PencilLine, Search } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { FileUploadModal, UploadType, FromSubjectLinesModal } from '@/components/modals'
+import { uploadFile } from '@/lib/uploadClient'
 
 type UploadedFileMeta = {
   id: string;           
@@ -123,17 +124,27 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     resetFeedback();
     try {
       setUploading(true);
-      setProgress(5);
+      setProgress(1);
 
-      // send to your existing single upload endpoint
-      const fd = new FormData();
-      fd.append('file', file);
-      const r = await fetch('/api/upload-url', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error(await r.text());
-      const { url } = await r.json();
+      const metadata = {
+        offerId: formData.offerId,
+        creativeType: formData.creativeType,
+        userId: 'current-user-id', 
+      };
+
+      const json = await uploadFile(file, {
+        endpoint: '/api/upload-url',
+        headers: {  },
+        onProgress: (p) => setProgress(p),
+        retry: { retries: 2, baseDelayMs: 400 },
+        compressImages: true,
+        metadata
+      });
+
+      const url = json.url as string;
+      if (!url) throw new Error('Upload response missing url');
 
       const previewUrl = await makeThumb(file);
-
       addFiles([{
         id: crypto.randomUUID(),
         name: file.name,
@@ -147,7 +158,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
 
       setProgress(100);
     } catch (e: unknown) {
-      setLastError({ scope: 'single', message: e instanceof Error ? e.message : 'Upload failed' });
+      const err = e instanceof Error ? e : new Error('Upload failed');
+      setLastError({ scope: 'single', message: err.message });
     } finally {
       setUploading(false);
       setTimeout(() => setProgress(null), 600);
@@ -158,14 +170,24 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     resetFeedback();
     try {
       setUploading(true);
-      setProgress(5);
+      setProgress(1);
 
-      const fd = new FormData();
-      fd.append('file', file);
-      const r = await fetch('/api/upload-zip', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error(await r.text());
-      const data = await r.json();
+      const metadata = {
+        offerId: formData.offerId,
+        creativeType: formData.creativeType,
+        userId: 'current-user-id', 
+      };
 
+      const json = await uploadFile(file, {
+        endpoint: '/api/upload-zip',
+        headers: {  },
+        onProgress: (p) => setProgress(p),
+        retry: { retries: 2, baseDelayMs: 400 },
+        compressImages: false, 
+        metadata
+      });
+
+      const data = json;
       const mapped: UploadedFileMeta[] = (data.extractedFiles || []).map((f: { fileId: string; fileName: string; fileUrl: string; fileSize: number; fileType?: string }) => ({
         id: f.fileId,
         name: f.fileName,
@@ -180,7 +202,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       addFiles(mapped);
       setProgress(100);
     } catch (e: unknown) {
-      setLastError({ scope: 'zip', message: e instanceof Error ? e.message : 'ZIP extraction failed' });
+      const err = e instanceof Error ? e : new Error('ZIP extraction failed');
+      setLastError({ scope: 'zip', message: err.message });
     } finally {
       setUploading(false);
       setTimeout(() => setProgress(null), 600);

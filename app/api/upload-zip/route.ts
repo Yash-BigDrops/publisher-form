@@ -1,94 +1,138 @@
-import { NextRequest, NextResponse } from "next/server";
-import JSZip from "jszip";
-import { put } from "@vercel/blob";
+import { NextResponse } from 'next/server';
+import { detectFileType } from '@/lib/security/fileType';
+import { previewZipCentralDirectory } from '@/lib/zipPreview';
+import { processZipBuffer } from '@/lib/zip';
+import { extractEncryptedZipBuffer } from '@/lib/zipPassword';
+import { sendToLoggingService } from '@/lib/logging';
+import { rateLimit } from '@/lib/rateLimit';
+import { progressStart, progressUpdate, progressDone, progressError } from '@/lib/progressStore';
 
-export const runtime = "nodejs";
+const ALLOW = new Set([
+  'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
+  'text/html','application/pdf',
+]);
+const MAX_FILES = Number(process.env.ZIP_MAX_FILES ?? 200);
+const MAX_TOTAL = Number(process.env.ZIP_MAX_TOTAL ?? 300 * 1024 * 1024);
+const MAX_DEPTH = Number(process.env.ZIP_MAX_DEPTH ?? 2);
+const PER_FILE_MAX = Number(process.env.ZIP_PER_FILE_MAX ?? 50 * 1024 * 1024);
+const ENABLE_SCAN = process.env.ENABLE_VIRUS_SCAN === '1';
+const ENCRYPTED_POLICY: 'skip' | 'error' | 'attempt' = (process.env.ZIP_ENCRYPTED_POLICY as 'skip' | 'error' | 'attempt') ?? 'skip';
 
-const ALLOWED_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".html"]);
-const MAX_FILES = 200;
+export const dynamic = 'force-dynamic';
 
-function extOf(name: string) {
-  const m = name.toLowerCase().match(/\.[a-z0-9]+$/i);
-  return m ? m[0] : "";
-}
+export async function POST(req: Request) {
+  const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown-ip';
+  if (!rateLimit(`zip:${ip}`, { capacity: 10, refillPerSec: 0.2 })) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
+  }
 
-function guessType(name: string) {
-  const n = name.toLowerCase();
-  if (/\.(png|jpg|jpeg|gif|webp)$/.test(n)) return "image/" + n.split(".").pop();
-  if (/\.html?$/.test(n)) return "text/html";
-  return "application/octet-stream";
-}
+  const form = await req.formData();
+  const file = form.get('file') as File | null;
+  if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
 
-export async function POST(req: NextRequest) {
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  progressStart(uploadId, { name: file.name, size: file.size });
+  
   try {
-    const form = await req.formData();
-    const file = form.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "file required" }, { status: 400 });
+    progressUpdate(uploadId, 1, 'reading');
 
-    const type = (file.type || "").toLowerCase();
-    const name = file.name.toLowerCase();
-    const isZip =
-      type === "application/zip" ||
-      type === "application/x-zip" ||
-      type === "application/x-zip-compressed" ||
-      type === "multipart/x-zip" ||
-      extOf(name) === ".zip";
+    const ab = await file.arrayBuffer();
+    const buf = Buffer.from(ab);
 
-    if (!isZip) {
-      return NextResponse.json({ error: "not a zip" }, { status: 400 });
+    const head = await detectFileType(buf, file.name);
+    if (head.mime !== 'application/zip') {
+      progressError(uploadId, 'Not a ZIP', 0);
+      return NextResponse.json({ error: 'Not a ZIP archive' }, { status: 415 });
     }
 
-    const arrayBuf = await file.arrayBuffer();
-    const buf = Buffer.from(arrayBuf);
-    const zip = await JSZip.loadAsync(buf);
+    progressUpdate(uploadId, 5, 'previewing');
+    const preview = previewZipCentralDirectory(buf);
+    if (!preview) {
+      progressError(uploadId, 'EOCD not found', 5);
+      return NextResponse.json({ error: 'Failed to parse ZIP (EOCD not found)' }, { status: 422 });
+    }
 
-    const files = Object.values(zip.files)
-      .filter((f) => !f.dir)
-      .slice(0, MAX_FILES);
+    const encryptedEntries = preview.entries.filter(e => e.encrypted && !e.isDirectory);
+    const hasEncrypted = encryptedEntries.length > 0;
+    const compression = {
+      totalCompressedBytes: preview.totals.compressed,
+      totalUncompressedBytes: preview.totals.uncompressed,
+      overallCompressionRatio: preview.totals.overallRatio,
+      entryCount: preview.totals.files + preview.totals.dirs,
+      highExpansionEntries: preview.suspicious.highExpansionEntries,
+      highOverallExpansion: preview.suspicious.highOverallExpansion,
+    };
 
-    const extractedFiles: Array<{
+    const extracted: Array<{
       fileId: string;
       fileName: string;
       fileUrl: string;
-      fileType: string;
       fileSize: number;
-      originalPath: string;
+      fileType: string;
+      hash: string;
+      depth: number;
+      encrypted?: boolean;
+    }> = [];
+    const skipped: Array<{
+      path?: string;
+      reason: string;
     }> = [];
 
-    for (const entry of files) {
-      const entryName = entry.name.split("/").pop() || "file";
-      const ext = extOf(entryName);
-      if (!ALLOWED_EXT.has(ext)) continue;
-
-      const content = await entry.async("nodebuffer");
-      const unique = `${entryName.replace(/\.[^/.]+$/, "")}_${Date.now()}_${Math.random()
-        .toString(36)
-        .slice(2, 8)}${ext}`;
-
-      const { url } = await put(unique, content, {
-        access: "public",
-        contentType: guessType(entryName),
-        addRandomSuffix: false,
-      });
-
-      extractedFiles.push({
-        fileId: unique,
-        fileName: entryName,
-        fileUrl: url,
-        fileType: guessType(entryName),
-        fileSize: content.length,
-        originalPath: entry.name,
-      });
+    
+    const password = req.headers.get('x-zip-password') || undefined;
+    if (hasEncrypted) {
+      if (ENCRYPTED_POLICY === 'error') {
+        progressError(uploadId, 'Encrypted entries present', 10);
+        return NextResponse.json({
+          error: 'ZIP contains password-protected entries',
+          encryptedEntries: encryptedEntries.map(e => e.name),
+          compression, uploadId
+        }, { status: 422 });
+      }
+      if (ENCRYPTED_POLICY === 'attempt' && password) {
+        progressUpdate(uploadId, 12, 'decrypting encrypted entries');
+        const dec = await extractEncryptedZipBuffer(buf, password, {
+          allow: ALLOW, enableVirusScan: ENABLE_SCAN, perFileMaxBytes: PER_FILE_MAX
+        });
+        extracted.push(...dec.extracted);
+        skipped.push(...dec.skipped);
+      } else if (ENCRYPTED_POLICY === 'skip') {
+        skipped.push(...encryptedEntries.map(e => ({ path: e.name, reason: 'encrypted' })));
+      }
     }
 
-    return NextResponse.json({
-      success: true,
-      zipFileId: `${Date.now()}`,
-      extractedFiles,
-      totalFiles: extractedFiles.length,
-      extractionDate: new Date().toISOString(),
+    progressUpdate(uploadId, 15, 'extracting safe entries');
+    const safe = await processZipBuffer(buf, {
+      allow: ALLOW,
+      maxFiles: MAX_FILES,
+      maxTotalBytes: MAX_TOTAL,
+      maxDepth: MAX_DEPTH,
+      perFileMaxBytes: PER_FILE_MAX,
+      enableVirusScan: ENABLE_SCAN,
+      deduplicate: true,
+      
+      onEntry: ({ path, index, total }) => {
+        if (index % 5 === 0) progressUpdate(uploadId, Math.min(90, Math.round(15 + (index / Math.max(1, total)) * 70)), `processing: ${path}`);
+      },
+      onProgress: (pct) => progressUpdate(uploadId, Math.min(95, pct), 'processing')
     });
-  } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "zip processing failed" }, { status: 500 });
+
+    extracted.push(...safe.extracted);
+    skipped.push(...safe.skipped);
+
+    progressUpdate(uploadId, 97, 'finalizing');
+    await sendToLoggingService({
+      event: 'zip-complete',
+      uploadId, extractedCount: extracted.length, skippedCount: skipped.length, totals: compression
+    });
+
+    progressDone(uploadId, { extractedCount: extracted.length, skippedCount: skipped.length });
+    return NextResponse.json({
+      uploadId, preview, compression,
+      extractedFiles: extracted, skipped, totalBytes: safe.totalBytes
+    });
+  } catch (e) {
+    progressError(uploadId, (e as Error).message || 'unknown', 0);
+    return NextResponse.json({ error: 'ZIP processing failed', detail: (e as Error).message, uploadId }, { status: 500 });
   }
 }

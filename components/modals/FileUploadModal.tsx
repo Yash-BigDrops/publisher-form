@@ -1,31 +1,39 @@
 "use client"
 
-import React, { useCallback } from 'react'
+import React from 'react'
 import { Button } from '@/components/ui/button'
 import { X, Upload, CheckCircle, AlertCircle, FolderOpen } from 'lucide-react'
 import { useFileUpload } from '@/hooks'
-import { FILE_UPLOAD_CONFIG, UPLOAD_STATUS_MESSAGES, formatFileSize } from '@/constants'
+import { FILE_UPLOAD_CONFIG, formatFileSize } from '@/constants'
 
 export type UploadType = 'single' | 'multiple'
+
+type UploadProvider = 'local' | 'vercel-blob' | 's3';
+type ChunkingConfig = { enabled: boolean; chunkSize: number }; // bytes
 
 interface FileUploadModalProps {
   isOpen: boolean
   onClose: () => void
   uploadType: UploadType
   onFileUpload: (file: File) => void
-  // TODO: BACKEND INTEGRATION - Add additional props for backend communication
-  // 
-  // BACKEND DEVELOPER NOTES:
-  // 1. Consider adding: onUploadProgress, onUploadError, uploadEndpoint
-  // 2. Add file validation callbacks for server-side validation
-  // 3. Include authentication headers and user context
-  // 4. Add retry mechanism for failed uploads
-  // 5. Consider adding chunked upload support for large files
-  // 6. Add file preview generation callbacks
-  // 7. Include file metadata collection (tags, categories, etc.)
-  // 8. Add support for different storage providers
-  // 9. Include file compression options
-  // 10. Add virus scanning integration points
+
+  uploadEndpoint?: string;                 
+  uploadZipEndpoint?: string;              
+  authHeaders?: Record<string, string>;    
+  userContext?: { userId?: string; role?: string };
+
+  onUploadProgress?: (pct: number) => void;
+  onUploadError?: (error: Error) => void;
+
+  onServerValidate?: (file: File) => Promise<{ ok: boolean; reason?: string }>;
+
+  retry?: { retries: number; baseDelayMs: number };
+  chunking?: ChunkingConfig;
+  provider?: UploadProvider;
+  compressImages?: boolean;
+  metadata?: Record<string, string | number | boolean>;
+  enableVirusScan?: boolean;         
+  onPreviewGenerated?: (url: string) => void;
 }
 
 const FileUploadModal: React.FC<FileUploadModalProps> = ({
@@ -38,7 +46,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
     ? FILE_UPLOAD_CONFIG.SINGLE_CREATIVE 
     : FILE_UPLOAD_CONFIG.MULTIPLE_CREATIVES
 
-  const { state, handlers, startUpload } = useFileUpload(
+  const { state, handlers } = useFileUpload(
     config.ALLOWED_TYPES,
     config.MAX_SIZE_MB,
     onFileUpload

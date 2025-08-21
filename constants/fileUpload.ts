@@ -19,19 +19,6 @@ export const FILE_UPLOAD_CONFIG: Record<string, FileUploadConfigItem> = {
     DESCRIPTION: 'Upload a single creative file',
     PLACEHOLDER: 'Drop your creative file here or click to browse',
     REQUIREMENTS: []
-    // TODO: BACKEND INTEGRATION - Update file type validation
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. These are client-side validations only
-    // 2. Server-side validation MUST be implemented
-    // 3. Consider adding: .svg, .pdf, .docx for broader support
-    // 4. Implement MIME type checking on server
-    // 5. Add file signature validation (magic bytes)
-    // 6. Consider file content analysis for security
-    // 7. Add virus scanning for all uploaded files
-    // 8. Implement file size limits based on user tier
-    // 9. Add file format conversion capabilities
-    // 10. Consider implementing file preview generation
   },
   MULTIPLE_CREATIVES: {
     ALLOWED_TYPES: ['application/zip'],
@@ -44,19 +31,6 @@ export const FILE_UPLOAD_CONFIG: Record<string, FileUploadConfigItem> = {
       'Supported formats: JPEG, PNG, GIF, WebP, HTML',
       'All files will be extracted and processed'
     ]
-    // TODO: BACKEND INTEGRATION - ZIP file processing
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. Implement ZIP file extraction on server
-    // 2. Validate each extracted file individually
-    // 3. Handle nested ZIP files (ZIP within ZIP)
-    // 4. Implement file path sanitization
-    // 5. Add ZIP bomb protection
-    // 6. Limit maximum files per ZIP
-    // 7. Implement file deduplication
-    // 8. Add progress tracking for large ZIPs
-    // 9. Handle corrupted ZIP files gracefully
-    // 10. Implement batch processing for extracted files
   }
 }
 
