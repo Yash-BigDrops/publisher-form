@@ -18,7 +18,7 @@ export interface FileUploadHandlers {
 export const useFileUpload = (
   allowedTypes: string[],
   maxSizeMB: number,
-  onFileUpload: (file: File) => void
+  onFileUpload: (file: File) => void | Promise<void>
 ) => {
   const [state, setState] = useState<FileUploadState>({
     selectedFile: null,
@@ -48,7 +48,7 @@ export const useFileUpload = (
     }
   }, [])
 
-  const handleFileSelect = useCallback((file: File) => {
+  const handleFileSelect = useCallback(async (file: File) => {
     const isValidType = allowedTypes.includes(file.type) || 
                        allowedTypes.some(type => file.name.endsWith(type)) ||
                        (file.name.toLowerCase().endsWith('.zip') && (
@@ -77,12 +77,25 @@ export const useFileUpload = (
       return
     }
 
+    // Auto-start upload immediately after selection
     setState(prev => ({
       ...prev,
       selectedFile: file,
+      uploadStatus: 'uploading',
       errorMessage: ''
     }))
-  }, [allowedTypes, maxSizeMB])
+
+    try {
+      await Promise.resolve(onFileUpload(file))
+      setState(prev => ({ ...prev, uploadStatus: 'success' }))
+    } catch (e) {
+      setState(prev => ({
+        ...prev,
+        uploadStatus: 'error',
+        errorMessage: 'Upload failed. Please try again.'
+      }))
+    }
+  }, [allowedTypes, maxSizeMB, onFileUpload])
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -100,22 +113,12 @@ export const useFileUpload = (
   }, [])
 
   const startUpload = useCallback(async () => {
+    // Kept for backward compatibility but upload now triggers on selection
     if (!state.selectedFile) return
-
-    setState(prev => ({ ...prev, uploadStatus: 'uploading' }))
-    
-         try {
-       // Simulate upload process (replace with actual API call when needed)
-       await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      setState(prev => ({ ...prev, uploadStatus: 'success' }))
+    try {
       onFileUpload(state.selectedFile)
-      
-      // Auto-close after success
-      setTimeout(() => {
-        resetState()
-      }, 1500)
-      
+      setState(prev => ({ ...prev, uploadStatus: 'success' }))
+      resetState()
     } catch (error) {
       setState(prev => ({ 
         ...prev, 

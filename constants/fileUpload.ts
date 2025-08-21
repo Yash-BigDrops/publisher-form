@@ -111,3 +111,38 @@ export const FILE_VALIDATION_RULES = {
     ALLOWED_CONTENT: ['image', 'html']
   }
 }
+
+// Single Creative View Constants
+export const SINGLE_CREATIVE_VIEW_CONFIG = {
+  MODAL: {
+    MAX_WIDTH: 'max-w-7xl',
+    HEIGHT: 'h-[90vh]',
+    HEADER_HEIGHT: 'p-6',
+    COLUMN_WIDTHS: {
+      PREVIEW: 'flex-1',
+      FEATURES: 'w-80',
+      DETAILS: 'w-80'
+    }
+  },
+  PREVIEW: {
+    MIN_HEIGHT: 'min-h-[400px]',
+    BACKGROUND: 'bg-gray-50',
+    BORDER_RADIUS: 'rounded-lg'
+  },
+  FEATURES: {
+    SPACING: 'space-y-4',
+    CARD_PADDING: 'p-3',
+    CARD_BORDER_RADIUS: 'rounded-lg'
+  },
+  ACTIONS: {
+    BUTTON_VARIANTS: {
+      PRIMARY: 'outline',
+      SECONDARY: 'ghost',
+      DANGER: 'ghost'
+    },
+    BUTTON_SIZES: {
+      SMALL: 'sm',
+      MEDIUM: 'default'
+    }
+  }
+}

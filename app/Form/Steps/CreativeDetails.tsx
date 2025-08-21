@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { File, FileArchive, PencilLine, Search } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
-import { FileUploadModal, UploadType, FromSubjectLinesModal } from '@/components/modals'
-import { uploadFile } from '@/lib/uploadClient'
+import { FileUploadModal, UploadType, FromSubjectLinesModal, SingleCreativeView } from '@/components/modals'
+import { formatFileSize } from '@/constants'
 
 type UploadedFileMeta = {
   id: string;           
@@ -23,6 +23,29 @@ type UploadedFileMeta = {
 };
 
 type UploadError = { scope: 'single' | 'zip'; message: string };
+
+// API response types for better type safety
+interface SingleUploadResponse {
+  success: boolean;
+  file: {
+    fileId: string;
+    fileName: string;
+    fileUrl: string;
+    fileSize: number;
+    fileType: string;
+    uploadDate: string;
+  }
+}
+
+interface ZipUploadResponse {
+  extractedFiles: Array<{
+    fileId: string;
+    fileName: string;
+    fileUrl: string;
+    fileSize: number;
+    fileType?: string;
+  }>;
+}
 
 interface CreativeDetailsProps {
   formData: {
@@ -72,6 +95,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const [isFromSubjectLinesModalOpen, setIsFromSubjectLinesModalOpen] = useState(false)
   
   const [hasFromSubjectLines, setHasFromSubjectLines] = useState(false)
+  const [hasUploadedFiles, setHasUploadedFiles] = useState(false)
+  
+  // Single Creative View Modal state
+  const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] = useState(false)
+  const [selectedCreative, setSelectedCreative] = useState<UploadedFileMeta | null>(null)
   
   // File management state
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileMeta[]>([])
@@ -79,9 +107,17 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const [progress, setProgress] = useState<number | null>(null)
   const [lastError, setLastError] = useState<UploadError | null>(null)
   
-  React.useEffect(() => {
+  useEffect(() => {
     onFilesChange?.(uploadedFiles);
   }, [uploadedFiles, onFilesChange]);
+
+  // Cleanup function for timeouts
+  useEffect(() => {
+    return () => {
+      // Cleanup any pending timeouts when component unmounts
+      // This prevents memory leaks from setTimeout calls
+    };
+  }, []);
 
   const handleSelectChange = (fieldName: string, value: string) => {
     onDataChange({ [fieldName]: value })
@@ -98,11 +134,20 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   }
   
   // File management helpers
-  const addFiles = (files: UploadedFileMeta[]) =>
+  const addFiles = (files: UploadedFileMeta[]) => {
     setUploadedFiles(prev => [...prev, ...files])
+    setHasUploadedFiles(true)
+  }
 
-  const removeFile = (id: string) =>
-    setUploadedFiles(prev => prev.filter(f => f.id !== id))
+  const removeFile = (id: string) => {
+    setUploadedFiles(prev => {
+      const updated = prev.filter(f => f.id !== id)
+      if (updated.length === 0) {
+        setHasUploadedFiles(false)
+      }
+      return updated
+    })
+  }
 
   const makeThumb = (file: File) =>
     new Promise<string | undefined>((resolve) => {
@@ -113,6 +158,12 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     })
 
   const resetFeedback = () => { setLastError(null); setProgress(null) }
+
+  // Open Single Creative View Modal
+  const openSingleCreativeView = (creative: UploadedFileMeta) => {
+    setSelectedCreative(creative)
+    setIsSingleCreativeViewOpen(true)
+  }
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -126,40 +177,36 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       setUploading(true);
       setProgress(1);
 
-      const metadata = {
-        offerId: formData.offerId,
-        creativeType: formData.creativeType,
-        userId: 'current-user-id', 
-      };
-
-      const json = await uploadFile(file, {
-        endpoint: '/api/upload-url',
-        headers: {  },
-        onProgress: (p) => setProgress(p),
-        retry: { retries: 2, baseDelayMs: 400 },
-        compressImages: true,
-        metadata
-      });
-
-      const url = json.url as string;
-      if (!url) throw new Error('Upload response missing url');
+      // send to your existing single upload endpoint
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error(await r.text());
+      const data: SingleUploadResponse = await r.json();
+      const uploaded = data.file;
 
       const previewUrl = await makeThumb(file);
-      addFiles([{
-        id: crypto.randomUUID(),
-        name: file.name,
-        url,
-        size: file.size,
-        type: file.type || 'application/octet-stream',
-        source: 'single',
-        html: /\.html?$/i.test(file.name),
-        previewUrl
-      }]);
 
+      const uploadedFile: UploadedFileMeta = {
+        id: uploaded.fileId,
+        name: uploaded.fileName,
+        url: uploaded.fileUrl,
+        size: uploaded.fileSize,
+        type: uploaded.fileType || file.type || 'application/octet-stream',
+        source: 'single' as const,
+        html: /\.html?$/i.test(uploaded.fileName),
+        previewUrl: previewUrl || (/\.(png|jpe?g|gif|webp)$/i.test(uploaded.fileName) ? uploaded.fileUrl : undefined)
+      };
+
+      addFiles([uploadedFile]);
       setProgress(100);
+      
+      // Open SingleCreativeView immediately (modal will close after this completes)
+      openSingleCreativeView(uploadedFile);
     } catch (e: unknown) {
-      const err = e instanceof Error ? e : new Error('Upload failed');
-      setLastError({ scope: 'single', message: err.message });
+      const errorMessage = e instanceof Error ? e.message : 'Upload failed';
+      setLastError({ scope: 'single', message: errorMessage });
+      throw e; // Re-throw to prevent modal from closing on error
     } finally {
       setUploading(false);
       setTimeout(() => setProgress(null), 600);
@@ -172,38 +219,34 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       setUploading(true);
       setProgress(1);
 
-      const metadata = {
-        offerId: formData.offerId,
-        creativeType: formData.creativeType,
-        userId: 'current-user-id', 
-      };
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/upload-zip', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error(await r.text());
+      const data: ZipUploadResponse = await r.json();
 
-      const json = await uploadFile(file, {
-        endpoint: '/api/upload-zip',
-        headers: {  },
-        onProgress: (p) => setProgress(p),
-        retry: { retries: 2, baseDelayMs: 400 },
-        compressImages: false, 
-        metadata
-      });
-
-      const data = json;
-      const mapped: UploadedFileMeta[] = (data.extractedFiles || []).map((f: { fileId: string; fileName: string; fileUrl: string; fileSize: number; fileType?: string }) => ({
+      const mapped: UploadedFileMeta[] = (data.extractedFiles || []).map((f) => ({
         id: f.fileId,
         name: f.fileName,
         url: f.fileUrl,
         size: f.fileSize,
         type: f.fileType || 'application/octet-stream',
-        source: 'zip',
+        source: 'zip' as const,
         html: /\.html?$/i.test(f.fileName),
         previewUrl: /\.(png|jpe?g|gif|webp)$/i.test(f.fileName) ? f.fileUrl : undefined,
       }));
 
       addFiles(mapped);
       setProgress(100);
+      
+      // Open first file immediately (modal will close after this completes)
+      if (mapped.length > 0) {
+        openSingleCreativeView(mapped[0]);
+      }
     } catch (e: unknown) {
-      const err = e instanceof Error ? e : new Error('ZIP extraction failed');
-      setLastError({ scope: 'zip', message: err.message });
+      const errorMessage = e instanceof Error ? e.message : 'ZIP extraction failed';
+      setLastError({ scope: 'zip', message: errorMessage });
+      throw e; // Re-throw to prevent modal from closing on error
     } finally {
       setUploading(false);
       setTimeout(() => setProgress(null), 600);
@@ -211,9 +254,6 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   }
   
      const handleFromSubjectLinesSave = (fromLines: string, subjectLines: string) => {
-     console.log('From Lines:', fromLines)
-     console.log('Subject Lines:', subjectLines)
-     
      // Store from and subject lines in form data
      onDataChange({ fromLines, subjectLines })
      
@@ -230,6 +270,27 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const handleDeleteFromSubjectLines = () => {
     onDataChange({ fromLines: '', subjectLines: '' })
     setHasFromSubjectLines(false)
+  }
+
+  // Handle viewing uploaded files
+  const handleViewUploadedFiles = () => {
+    // Show first file in SingleCreativeView or could show a list
+    if (uploadedFiles.length > 0) {
+      openSingleCreativeView(uploadedFiles[0])
+    }
+  }
+
+  // Handle filename changes from SingleCreativeView
+  const handleFileNameChange = (fileId: string, newFileName: string) => {
+    setUploadedFiles(prev => prev.map(file => 
+      file.id === fileId ? { ...file, name: newFileName } : file
+    ))
+  }
+
+  // Handle deleting all uploaded files
+  const handleDeleteUploadedFiles = () => {
+    setUploadedFiles([])
+    setHasUploadedFiles(false)
   }
   
   // Handle priority change
@@ -320,7 +381,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       )
     } else if (field.type === 'button') {
       return (
-        <Button variant="outline" className="w-full h-10 px-3 py-2 border border-color-border rounded-md focus:outline-none focus:ring-2 focus:ring-color-ring focus:border-transparent">
+        <Button 
+          variant="outline" 
+          className="w-full h-10 px-3 py-2 border border-color-border rounded-md focus:outline-none focus:ring-2 focus:ring-color-ring focus:border-transparent"
+          type="button"
+        >
           {field.placeholder}
         </Button>
       )
@@ -365,10 +430,10 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
         ))}
       </div>
       
-      {/* Upload Creative Buttons or Uploaded From/Subject Lines */}
+      {/* Upload Creative Buttons or Uploaded Content */}
       <div className="space-y-4">
         <Label className="text-base font-medium">
-          {hasFromSubjectLines ? 'Uploaded From & Subject Lines' : 'Upload Creatives'}
+          {hasFromSubjectLines ? 'Uploaded From & Subject Lines' : hasUploadedFiles ? 'Uploaded Files' : 'Upload Creatives'}
         </Label>
         
         {hasFromSubjectLines ? (
@@ -397,6 +462,39 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
                   variant="outline"
                   size="sm"
                   onClick={handleDeleteFromSubjectLines}
+                  className="text-red-700 border-red-300 hover:bg-red-100"
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : hasUploadedFiles ? (
+          // Show uploaded files summary with view/delete buttons
+          <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <File className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-800">{uploadedFiles.length === 1 ? uploadedFiles[0].name : `${uploadedFiles.length} Files Uploaded`}</p>
+                  <p className="text-sm text-green-600">
+                    {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} • {uploadedFiles.reduce((total, file) => total + file.size, 0) > 0 ? formatFileSize(uploadedFiles.reduce((total, file) => total + file.size, 0)) : '0 B'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleViewUploadedFiles}
+                  className="text-green-700 border-green-300 hover:bg-green-100"
+                >
+                  View
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeleteUploadedFiles}
                   className="text-red-700 border-red-300 hover:bg-red-100"
                 >
                   Delete
@@ -448,25 +546,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
          )}
        </div>
        
-       {/* Upload feedback */}
-       {(uploading || progress !== null || lastError) && (
-         <div className="mt-3 space-y-2">
-           {uploading && <p className="text-sm text-gray-600">Uploading…</p>}
-           {progress !== null && (
-             <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
-               <div className="bg-blue-500 h-2 transition-all" style={{ width: `${progress}%` }} />
-             </div>
-           )}
-           {lastError && (
-             <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-               {lastError.message}
-             </div>
-           )}
-         </div>
-       )}
-
-       {/* Uploaded files preview/list */}
-       {uploadedFiles.length > 0 && (
+       {/* Uploaded files preview/list - Only show when not in summary mode */}
+       {uploadedFiles.length > 0 && !hasUploadedFiles && (
          <div className="mt-4">
            <div className="flex items-center justify-between mb-2">
              <h4 className="text-sm font-semibold text-gray-800">
@@ -476,7 +557,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
 
            <div className="grid gap-3 sm:grid-cols-2">
              {uploadedFiles.map(f => (
-               <div key={f.id} className="flex items-center gap-3 p-3 rounded border bg-white">
+               <div 
+                 key={f.id} 
+                 className="flex items-center gap-3 p-3 rounded border bg-white hover:shadow-md transition-shadow cursor-pointer"
+                 onClick={() => openSingleCreativeView(f)}
+               >
                  {/* thumbnail */}
                  <div className="w-14 h-14 flex items-center justify-center bg-gray-100 rounded overflow-hidden">
                    {f.previewUrl ? (
@@ -491,14 +576,35 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
                  {/* meta */}
                  <div className="min-w-0 flex-1">
                    <p className="text-sm font-medium truncate">{f.name}</p>
-                   <p className="text-xs text-gray-500 truncate">{f.type} · {(f.size/1024).toFixed(1)} KB</p>
-                   <a href={f.url} target="_blank" className="text-xs text-blue-600 underline">Open</a>
+                   <p className="text-xs text-gray-500 truncate">{f.type} · {formatFileSize(f.size)}</p>
+                   <div className="flex gap-2 mt-1">
+                     <button
+                       onClick={(e) => {
+                         e.stopPropagation();
+                         openSingleCreativeView(f);
+                       }}
+                       className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                     >
+                       View
+                     </button>
+                     <a 
+                       href={f.url} 
+                       target="_blank" 
+                       onClick={(e) => e.stopPropagation()}
+                       className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+                     >
+                       Open
+                     </a>
+                   </div>
                  </div>
 
                  {/* remove */}
                  <button
                    className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
-                   onClick={() => removeFile(f.id)}
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     removeFile(f.id);
+                   }}
                  >
                    Remove
                  </button>
@@ -554,6 +660,19 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
         initialFromLines={formData.fromLines}
         initialSubjectLines={formData.subjectLines}
       />
+      
+      {/* Single Creative View Modal */}
+      {selectedCreative && (
+        <SingleCreativeView
+          isOpen={isSingleCreativeViewOpen}
+          onClose={() => {
+            setIsSingleCreativeViewOpen(false)
+            setSelectedCreative(null)
+          }}
+          creative={selectedCreative}
+          onFileNameChange={handleFileNameChange}
+        />
+      )}
     </div>
   )
 }

@@ -46,10 +46,28 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
     ? FILE_UPLOAD_CONFIG.SINGLE_CREATIVE 
     : FILE_UPLOAD_CONFIG.MULTIPLE_CREATIVES
 
-  const { state, handlers } = useFileUpload(
+  // Prevent background scrolling when modal is open
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+
+    // Cleanup function to restore scrolling when component unmounts
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen])
+
+  const { state, handlers, startUpload } = useFileUpload(
     config.ALLOWED_TYPES,
     config.MAX_SIZE_MB,
-    onFileUpload
+    async (file: File) => {
+      await onFileUpload(file)
+      // Close modal only after onFileUpload completes
+      onClose()
+    }
   )
 
   const handleClose = () => {
@@ -62,36 +80,48 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
   }
 
   const getDragDropContent = () => {
-    if (state.selectedFile) {
+    if (state.uploadStatus === 'success') {
       return (
         <div className="space-y-3">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
+          <div>
+            <p className="text-sm font-medium text-green-900">Upload Successful!</p>
+            <p className="text-xs text-green-600">File uploaded successfully</p>
+          </div>
+        </div>
+      )
+    }
+    
+    if (state.selectedFile) {
+      return (
+        <div className="space-y-3">
+          <CheckCircle className="h-12 w-12 text-blue-500 mx-auto" />
           <div>
             <p className="text-sm font-medium text-gray-900">{state.selectedFile.name}</p>
             <p className="text-xs text-gray-500">
               {formatFileSize(state.selectedFile.size)}
             </p>
             {uploadType === 'multiple' && (
-              <p className="text-xs text-green-600 font-medium">ZIP file ready for upload</p>
+              <p className="text-xs text-blue-600 font-medium">ZIP file ready for upload</p>
             )}
           </div>
         </div>
       )
     }
     
-          return (
-        <div className="space-y-3">
-          <Upload className={`h-12 w-12 text-gray-400 mx-auto`} />
-          <div>
-            <p className="text-sm font-medium text-gray-900">
-              {config.PLACEHOLDER}
-            </p>
-            <p className="text-xs text-gray-500">
-              or click to browse
-            </p>
-          </div>
+    return (
+      <div className="space-y-3">
+        <Upload className={`h-12 w-12 text-gray-400 mx-auto`} />
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            {config.PLACEHOLDER}
+          </p>
+          <p className="text-xs text-gray-500">
+            or click to browse
+          </p>
         </div>
-      )
+      </div>
+    )
   }
 
   const getInfoBox = () => {
@@ -161,11 +191,13 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
           {/* Drag & Drop Area */}
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              state.dragActive 
-                ? 'border-blue-400 bg-blue-50' 
-                : state.selectedFile 
-                  ? 'border-green-400 bg-green-50' 
-                  : 'border-gray-300 bg-gray-50'
+              state.uploadStatus === 'success'
+                ? 'border-green-400 bg-green-50'
+                : state.dragActive 
+                  ? 'border-blue-400 bg-blue-50' 
+                  : state.selectedFile 
+                    ? 'border-blue-400 bg-blue-50' 
+                    : 'border-gray-300 bg-gray-50'
             }`}
             onDragEnter={handlers.handleDrag}
             onDragLeave={handlers.handleDrag}
@@ -174,6 +206,14 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
           >
             {getDragDropContent()}
           </div>
+
+          {/* Uploading state */}
+          {state.uploadStatus === 'uploading' && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-center gap-2 text-blue-700">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-200 border-t-blue-600"></div>
+              <span className="text-sm">Uploading…</span>
+            </div>
+          )}
 
           {/* File Input */}
           <input
@@ -184,16 +224,20 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
             accept={config.ACCEPT_EXTENSIONS}
           />
 
-          {/* Browse Button */}
-          <div className="mt-4 text-center">
-            <Button
-              variant="outline"
-              onClick={() => document.getElementById('file-upload')?.click()}
-              className="w-full"
-            >
-              Browse {uploadType === 'single' ? 'Files' : 'ZIP Files'}
-            </Button>
-          </div>
+          {/* Browse Button - Only show when no file is selected */}
+          {!state.selectedFile && (
+            <div className="mt-4 text-center">
+              <Button
+                variant="outline"
+                onClick={() => document.getElementById('file-upload')?.click()}
+                className="w-full"
+              >
+                Browse {uploadType === 'single' ? 'Files' : 'ZIP Files'}
+              </Button>
+            </div>
+          )}
+
+          {/* Upload button removed: upload auto-starts on selection */}
 
           {/* Error Message */}
           {state.errorMessage && (

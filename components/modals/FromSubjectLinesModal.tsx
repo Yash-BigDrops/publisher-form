@@ -26,6 +26,20 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   const [subjectLines, setSubjectLines] = useState(initialSubjectLines)
   const [errors, setErrors] = useState<{ fromLines?: string; subjectLines?: string }>({})
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+
+    // Cleanup function to restore scrolling when component unmounts
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen])
+
   // Update state when modal opens with initial values
   useEffect(() => {
     if (isOpen) {
