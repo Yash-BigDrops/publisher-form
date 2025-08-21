@@ -16,9 +16,12 @@ export const FILE_UPLOAD_CONFIG: Record<string, FileUploadConfigItem> = {
     MAX_SIZE_MB: Infinity,
     ACCEPT_EXTENSIONS: '.jpg,.jpeg,.png,.gif,.webp,.html,.zip',
     LABEL: 'Single Creative',
-    DESCRIPTION: 'Upload a single creative file',
+    DESCRIPTION: 'Upload a single creative file or ZIP with assets',
     PLACEHOLDER: 'Drop your creative file here or click to browse',
-    REQUIREMENTS: []
+    REQUIREMENTS: [
+      'For HTML creatives: ZIP files with assets are automatically detected',
+      'Single HTML files with images should be packaged as ZIP'
+    ]
   },
   MULTIPLE_CREATIVES: {
     ALLOWED_TYPES: ['application/zip'],

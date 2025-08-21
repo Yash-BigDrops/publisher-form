@@ -46,6 +46,17 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
     ? FILE_UPLOAD_CONFIG.SINGLE_CREATIVE 
     : FILE_UPLOAD_CONFIG.MULTIPLE_CREATIVES
 
+  const { state, handlers, startUpload } = useFileUpload(
+    config.ALLOWED_TYPES,
+    config.MAX_SIZE_MB,
+    async (file: File) => {
+      await onFileUpload(file)
+      // Reset state and close modal only after onFileUpload completes
+      handlers.resetState()
+      onClose()
+    }
+  )
+
   // Prevent background scrolling when modal is open
   React.useEffect(() => {
     if (isOpen) {
@@ -60,15 +71,16 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
     }
   }, [isOpen])
 
-  const { state, handlers, startUpload } = useFileUpload(
-    config.ALLOWED_TYPES,
-    config.MAX_SIZE_MB,
-    async (file: File) => {
-      await onFileUpload(file)
-      // Close modal only after onFileUpload completes
-      onClose()
+  // Reset modal state when opening (separate effect to avoid setState loops)
+  React.useEffect(() => {
+    if (isOpen) {
+      // Use setTimeout to avoid setState during render cycle
+      const timer = setTimeout(() => {
+        handlers.resetState()
+      }, 0)
+      return () => clearTimeout(timer)
     }
-  )
+  }, [isOpen, handlers])
 
   const handleClose = () => {
     handlers.resetState()

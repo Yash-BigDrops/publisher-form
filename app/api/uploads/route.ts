@@ -16,6 +16,25 @@ export async function GET(req: NextRequest) {
     return new Response('not found', { status: 404 });
   }
 
+  // Determine content type based on file extension
+  const ext = name.toLowerCase().split('.').pop();
+  let contentType = 'application/octet-stream';
+  
+  if (ext === 'html' || ext === 'htm') {
+    contentType = 'text/html; charset=utf-8';
+  } else if (ext === 'css') {
+    contentType = 'text/css';
+  } else if (ext === 'js') {
+    contentType = 'application/javascript';
+  } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '')) {
+    contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+  }
+
   const stream = createReadStream(p);
-  return new Response(stream as unknown as ReadableStream);
+  return new Response(stream as unknown as ReadableStream, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 }

@@ -1,0 +1,542 @@
+"use client"
+
+import React, { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { FileText, Image, File, Minimize2, X, FileArchive } from 'lucide-react'
+import { formatFileSize, getFileType } from '@/constants'
+import SingleCreativeView from './SingleCreativeView'
+
+// Image Preview Component with error handling
+const ImagePreview: React.FC<{ src: string; alt: string; fileName: string }> = ({ src, alt, fileName }) => {
+  const [imageError, setImageError] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  React.useEffect(() => {
+    // Reset states when src changes
+    setImageError(false)
+    setIsLoading(true)
+    console.log(`Loading image: ${src} for file: ${fileName}`)
+  }, [src, fileName])
+
+  return (
+    <div className="w-full h-full relative bg-gray-100">
+      {!imageError && (
+        <img
+          src={src}
+          alt={alt}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+          onError={(e) => {
+            console.error(`Failed to load image: ${src} for file: ${fileName}`, e)
+            setImageError(true)
+            setIsLoading(false)
+          }}
+          onLoad={() => {
+            console.log(`Successfully loaded image: ${src} for file: ${fileName}`)
+            setIsLoading(false)
+          }}
+          crossOrigin="anonymous"
+        />
+      )}
+      
+      {/* Loading state */}
+      {isLoading && !imageError && (
+        <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+          <div className="text-center">
+            <div className="animate-pulse">
+              <Image className="h-10 w-10 text-gray-400 mx-auto mb-2" />
+              <p className="text-xs font-medium text-gray-500">Loading...</p>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Error fallback */}
+      {imageError && (
+        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+          <div className="text-center">
+            <Image className="h-10 w-10 text-blue-500 mx-auto mb-2" />
+            <p className="text-xs font-medium text-blue-600">Image</p>
+            <p className="text-xs text-blue-500 mt-1">{fileName.split('.').pop()?.toUpperCase()}</p>
+            <p className="text-xs text-gray-400 mt-1">Failed to load</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface MultipleCreativeViewProps {
+  isOpen: boolean
+  onClose: () => void
+  creatives: Array<{
+    id: string
+    name: string
+    url: string
+    size: number
+    type: string
+    previewUrl?: string
+    html?: boolean
+  }>
+  zipFileName?: string
+  onRemoveCreative?: (creativeId: string) => void
+  onFileNameChange?: (fileId: string, newFileName: string) => void
+}
+
+const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
+  isOpen,
+  onClose,
+  creatives,
+  zipFileName,
+  onRemoveCreative,
+  onFileNameChange
+}) => {
+  const [currentCreativeIndex, setCurrentCreativeIndex] = useState(0)
+  const [isHtmlEditorFullscreen, setIsHtmlEditorFullscreen] = useState(false)
+  const [isImagePreviewFullscreen, setIsImagePreviewFullscreen] = useState(false)
+  
+  // SingleCreativeView state
+  const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] = useState(false)
+  const [selectedCreative, setSelectedCreative] = useState<MultipleCreativeViewProps['creatives'][0] | null>(null)
+  
+  // HTML content state for editing
+  const [htmlContent, setHtmlContent] = useState('')
+
+  // Current creative
+  const currentCreative = creatives[currentCreativeIndex]
+
+  // Prevent background scrolling when modal is open
+  React.useEffect(() => {
+    if (isOpen) {
+      // Store current scroll position
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+    } else {
+      // Restore scroll position and body styles
+      const scrollY = document.body.style.top
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      document.body.style.overflow = ''
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1)
+      }
+    }
+
+    // Cleanup function to restore scrolling when component unmounts
+    return () => {
+      const scrollY = document.body.style.top
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      document.body.style.overflow = ''
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1)
+      }
+    }
+  }, [isOpen])
+
+  // Load HTML content when creative changes for HTML creatives
+  React.useEffect(() => {
+    if (isOpen && currentCreative && (currentCreative.type?.includes('html') || currentCreative.name.toLowerCase().includes('.html'))) {
+      console.log('Loading HTML content for HTML creative...')
+      fetchHtmlContent()
+    }
+  }, [isOpen, currentCreative]) // fetchHtmlContent is defined inline and doesn't need to be a dependency
+
+  // Function to fetch HTML content from uploaded file
+  const fetchHtmlContent = async () => {
+    if (!currentCreative) return
+    
+    try {
+      console.log('Fetching HTML content from:', currentCreative.url)
+      
+      // First, try to get the file content from our API endpoint
+      const encodedFileUrl = encodeURIComponent(currentCreative.url)
+      const apiResponse = await fetch(`/api/get-file-content?fileId=${currentCreative.id}&fileUrl=${encodedFileUrl}&processAssets=true`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      })
+      
+      if (apiResponse.ok) {
+        const htmlText = await apiResponse.text()
+        console.log('HTML content loaded via API, length:', htmlText.length)
+        setHtmlContent(htmlText)
+        return
+      } else {
+        console.log('API response not OK, status:', apiResponse.status)
+      }
+      
+      // If API fails, try to fetch directly from the uploaded URL
+      console.log('API failed, trying direct URL fetch...')
+      const directResponse = await fetch(currentCreative.url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        mode: 'cors',
+      })
+      
+      if (directResponse.ok) {
+        const htmlText = await directResponse.text()
+        console.log('HTML content loaded directly, length:', htmlText.length)
+        setHtmlContent(htmlText)
+      } else {
+        // Final fallback
+        console.log('All methods failed, using fallback content')
+        setHtmlContent(`<!-- HTML Content Loading Failed -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Creative Editor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .message {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #ff6b6b;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="message">
+        <h3>⚠️ Unable to load original HTML content</h3>
+        <p>You can start editing by replacing this content with your HTML code.</p>
+    </div>
+</body>
+</html>`)
+      }
+    } catch (error) {
+      console.log('Fetch error, using fallback content...')
+      console.error('Error details:', error)
+      setHtmlContent(`<!-- HTML Content Loading Failed -->
+<!DOCTYPE html>
+<html>
+<body>
+    <div style="padding: 20px; font-family: Arial, sans-serif;">
+        <h3>⚠️ Unable to load HTML content</h3>
+        <p>Please try refreshing or contact support.</p>
+    </div>
+</body>
+</html>`)
+    }
+  }
+
+  if (!isOpen) return null
+
+  const handleSaveHtml = async () => {
+    console.log('Saving HTML changes for creative:', currentCreative?.id)
+  }
+
+  // HTML Editor fullscreen toggle
+  const toggleHtmlEditorFullscreen = () => {
+    setIsHtmlEditorFullscreen(!isHtmlEditorFullscreen)
+  }
+
+  // Image Preview fullscreen toggle
+  const toggleImagePreviewFullscreen = () => {
+    setIsImagePreviewFullscreen(!isImagePreviewFullscreen)
+  }
+
+  // SingleCreativeView handlers
+  const openSingleCreativeView = (creative: MultipleCreativeViewProps['creatives'][0]) => {
+    setSelectedCreative(creative)
+    setIsSingleCreativeViewOpen(true)
+  }
+
+  const closeSingleCreativeView = () => {
+    setIsSingleCreativeViewOpen(false)
+    setSelectedCreative(null)
+  }
+
+  const handleFileNameChangeFromSingle = (fileId: string, newFileName: string) => {
+    // Update the creative in the creatives array
+    const updatedCreatives = creatives.map(creative => 
+      creative.id === fileId ? { ...creative, name: newFileName } : creative
+    )
+    
+    // Update selected creative if it's the one being edited
+    if (selectedCreative?.id === fileId) {
+      setSelectedCreative({ ...selectedCreative, name: newFileName })
+    }
+    
+    // Propagate the change to parent component
+    onFileNameChange?.(fileId, newFileName)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+      <div className="bg-white w-full h-full flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-purple-100 rounded-xl shadow-sm">
+              <FileArchive className="h-6 w-6 text-purple-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-1">
+                {zipFileName || 'Multiple Creatives'}
+              </h2>
+              <p className="text-sm text-gray-600 flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                  {creatives.length} files
+                </span>
+                <span>•</span>
+                <span>ZIP Archive</span>
+              </p>
+            </div>
+          </div>
+          
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-all duration-150 hover:shadow-md"
+          >
+            Save and Continue
+          </Button>
+        </div>
+
+        {/* Content - Card-based Layout */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full p-6 bg-gray-50 overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+              {creatives.map((creative, index) => {
+                const fileType = getFileType(creative.name)
+                const isImage = fileType === 'image'
+                const isHtml = fileType === 'html'
+                
+                // Debug logging for image URLs
+                if (isImage) {
+                  console.log(`Image creative ${creative.name}:`, {
+                    previewUrl: creative.previewUrl,
+                    url: creative.url,
+                    finalSrc: creative.previewUrl || creative.url
+                  })
+                }
+                
+                return (
+                  <div key={creative.id} className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 overflow-hidden group">
+                    {/* Preview Section */}
+                    <div className="aspect-[4/3] bg-gray-50 overflow-hidden relative">
+                      {isImage ? (
+                        <ImagePreview 
+                          src={creative.previewUrl || creative.url}
+                          alt={creative.name}
+                          fileName={creative.name}
+                        />
+                      ) : isHtml ? (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-50">
+                          <div className="text-center">
+                            <FileText className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
+                            <p className="text-xs font-medium text-emerald-700">HTML</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-50">
+                          <div className="text-center">
+                            <File className="h-10 w-10 text-slate-500 mx-auto mb-2" />
+                            <p className="text-xs font-medium text-slate-600">File</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Remove Button - Top Right */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onRemoveCreative) {
+                              onRemoveCreative(creative.id)
+                            }
+                          }}
+                          className="h-7 px-2 bg-white/95 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-xs font-medium shadow-sm"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    {/* Content Section */}
+                    <div className="p-4">
+                      {/* Filename and File Info */}
+                      <div className="mb-3">
+                        <h3 className="font-medium text-gray-900 text-sm truncate mb-1" title={creative.name}>
+                          {creative.name}
+                        </h3>
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${
+                            isImage ? 'bg-blue-50 text-blue-600' :
+                            isHtml ? 'bg-emerald-50 text-emerald-600' :
+                            'bg-gray-50 text-gray-600'
+                          }`}>
+                            {fileType}
+                          </span>
+                          <span className="font-medium">{formatFileSize(creative.size)}</span>
+                        </div>
+                      </div>
+                      
+                      {/* View Button */}
+                      <Button
+                        onClick={() => {
+                          openSingleCreativeView(creative)
+                        }}
+                        className="w-full bg-blue-400 hover:bg-blue-600 text-white font-medium py-2 px-3 rounded-md text-sm transition-colors duration-200"
+                      >
+                        View Creative
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fullscreen HTML Editor Modal */}
+      {isHtmlEditorFullscreen && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+          <div className="bg-white w-full h-full max-w-7xl max-h-[95vh] flex flex-col rounded-lg shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Fullscreen Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <FileText className="h-5 w-5 text-orange-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-800">HTML Editor - {currentCreative?.name}</h2>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={toggleHtmlEditorFullscreen}
+                  className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors"
+                >
+                  <Minimize2 className="h-4 w-4" />
+                  Exit Fullscreen
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveHtml}
+                  className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors"
+                >
+                  <FileText className="h-4 w-4" />
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+
+            {/* Fullscreen Content - Split View */}
+            <div className="flex-1 flex overflow-hidden">
+              {/* Left Side: HTML Editor */}
+              <div className="w-1/2 border-r border-gray-200 flex flex-col">
+                <div className="p-4 border-b border-gray-200">
+                  <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                    HTML Code
+                  </Label>
+                </div>
+                <div className="flex-1 p-4">
+                  <Textarea
+                    value={htmlContent}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlContent(e.target.value)}
+                    placeholder="Edit your HTML code here..."
+                    className="w-full h-full resize-none text-sm font-mono border-gray-300 focus:border-orange-500 focus:ring-orange-500/20"
+                  />
+                </div>
+              </div>
+
+              {/* Right Side: Live Preview */}
+              <div className="w-1/2 flex flex-col">
+                <div className="p-4 border-b border-gray-200">
+                  <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                    Live Preview
+                  </Label>
+                </div>
+                <div className="flex-1 bg-gray-50">
+                  <iframe
+                    srcDoc={htmlContent || '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif;color:#666;"><p>HTML content will appear here</p></div>'}
+                    title="HTML Preview - Fullscreen"
+                    className="w-full h-full border-0"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Image Preview Modal */}
+      {isImagePreviewFullscreen && currentCreative && getFileType(currentCreative.name) === 'image' && currentCreative.previewUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+          <div className="relative w-full h-full flex items-center justify-center p-8">
+            {/* Exit Fullscreen Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleImagePreviewFullscreen}
+              className="absolute top-6 right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
+            >
+              <Minimize2 className="h-4 w-4" />
+              Exit Fullscreen
+            </Button>
+            
+            {/* Header with filename */}
+            <div className="absolute top-6 left-6 flex items-center gap-3 text-white z-10">
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <Image className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-semibold">{currentCreative?.name}</h2>
+            </div>
+
+            {/* Fullscreen Image */}
+            <img
+              src={currentCreative?.previewUrl}
+              alt={currentCreative?.name}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            />
+            
+            {/* Click outside to close */}
+            <div 
+              className="absolute inset-0 cursor-pointer"
+              onClick={toggleImagePreviewFullscreen}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* SingleCreativeView Modal */}
+      {selectedCreative && (
+        <SingleCreativeView
+          isOpen={isSingleCreativeViewOpen}
+          onClose={closeSingleCreativeView}
+          creative={selectedCreative}
+          onFileNameChange={handleFileNameChangeFromSingle}
+        />
+      )}
+    </div>
+  )
+}
+
+export default MultipleCreativeView

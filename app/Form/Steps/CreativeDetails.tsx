@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { File, FileArchive, PencilLine, Search } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
-import { FileUploadModal, UploadType, FromSubjectLinesModal, SingleCreativeView } from '@/components/modals'
+import { FileUploadModal, UploadType, FromSubjectLinesModal, SingleCreativeView, MultipleCreativeView } from '@/components/modals'
 import { formatFileSize } from '@/constants'
 
 type UploadedFileMeta = {
@@ -19,7 +19,9 @@ type UploadedFileMeta = {
   type: string;
   source?: 'single' | 'zip';
   html?: boolean;       
-  previewUrl?: string;  
+  previewUrl?: string;
+  assetCount?: number;
+  hasAssets?: boolean;
 };
 
 type UploadError = { scope: 'single' | 'zip'; message: string };
@@ -27,13 +29,28 @@ type UploadError = { scope: 'single' | 'zip'; message: string };
 // API response types for better type safety
 interface SingleUploadResponse {
   success: boolean;
-  file: {
+  file?: {
     fileId: string;
     fileName: string;
     fileUrl: string;
     fileSize: number;
     fileType: string;
     uploadDate: string;
+  }
+  zipAnalysis?: {
+    isSingleCreative: boolean
+    mainCreative: {
+      fileId: string
+      fileName: string
+      fileUrl: string
+      fileSize: number
+      fileType: string
+      previewUrl?: string
+    }
+    assetCount: number
+    assetTypes: string[]
+    totalSize: number
+    structure: string
   }
 }
 
@@ -44,6 +61,7 @@ interface ZipUploadResponse {
     fileUrl: string;
     fileSize: number;
     fileType?: string;
+    previewUrl?: string; // TODO: Backend will populate this for image files
   }>;
 }
 
@@ -101,6 +119,14 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] = useState(false)
   const [selectedCreative, setSelectedCreative] = useState<UploadedFileMeta | null>(null)
   
+  // Multiple Creative View Modal state
+  const [isMultipleCreativeViewOpen, setIsMultipleCreativeViewOpen] = useState(false)
+  const [selectedCreatives, setSelectedCreatives] = useState<UploadedFileMeta[]>([])
+  const [zipFileName, setZipFileName] = useState<string>('')
+  
+  // Store ZIP filename for uploaded files summary (persists after modal close)
+  const [uploadedZipFileName, setUploadedZipFileName] = useState<string>('')
+  
   // File management state
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileMeta[]>([])
   const [uploading, setUploading] = useState(false)
@@ -109,6 +135,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   
   useEffect(() => {
     onFilesChange?.(uploadedFiles);
+    // Ensure hasUploadedFiles stays in sync with uploadedFiles array
+    setHasUploadedFiles(uploadedFiles.length > 0);
   }, [uploadedFiles, onFilesChange]);
 
   // Cleanup function for timeouts
@@ -135,16 +163,19 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   
   // File management helpers
   const addFiles = (files: UploadedFileMeta[]) => {
-    setUploadedFiles(prev => [...prev, ...files])
-    setHasUploadedFiles(true)
+    setUploadedFiles(prev => {
+      const updated = [...prev, ...files]
+      // Update hasUploadedFiles based on the new array length
+      setHasUploadedFiles(updated.length > 0)
+      return updated
+    })
   }
 
   const removeFile = (id: string) => {
     setUploadedFiles(prev => {
       const updated = prev.filter(f => f.id !== id)
-      if (updated.length === 0) {
-        setHasUploadedFiles(false)
-      }
+      // Update hasUploadedFiles based on the new array length
+      setHasUploadedFiles(updated.length > 0)
       return updated
     })
   }
@@ -165,6 +196,27 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     setIsSingleCreativeViewOpen(true)
   }
 
+  // Open Multiple Creative View Modal
+  const openMultipleCreativeView = (creatives: UploadedFileMeta[], fileName?: string) => {
+    setSelectedCreatives(creatives)
+    setZipFileName(fileName || '')
+    setUploadedZipFileName(fileName || '') // Persist ZIP filename for summary
+    setIsMultipleCreativeViewOpen(true)
+  }
+
+  // Handle removing a creative from the multiple view
+  const handleRemoveCreative = (creativeId: string) => {
+    // Remove from selectedCreatives
+    setSelectedCreatives(prev => prev.filter(creative => creative.id !== creativeId))
+    
+    // Remove from uploadedFiles
+    setUploadedFiles(prev => {
+      const updated = prev.filter(file => file.id !== creativeId)
+      setHasUploadedFiles(updated.length > 0)
+      return updated
+    })
+  }
+
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
     onDataChange({ [name]: value })
@@ -180,11 +232,53 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       // send to your existing single upload endpoint
       const fd = new FormData();
       fd.append('file', file);
+      
+      // Smart ZIP handling: Check if it's a ZIP file
+      if (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')) {
+        // Add smart detection flag to determine single vs multiple creatives
+        fd.append('smartDetection', 'true');
+      }
+      
       const r = await fetch('/api/upload', { method: 'POST', body: fd });
       if (!r.ok) throw new Error(await r.text());
       const data: SingleUploadResponse = await r.json();
-      const uploaded = data.file;
 
+      // Handle smart ZIP detection response
+      if (data.zipAnalysis) {
+        if (data.zipAnalysis.isSingleCreative) {
+          // Treat as single creative with assets
+          const mainFile = data.zipAnalysis.mainCreative;
+          const uploadedFile: UploadedFileMeta = {
+            id: mainFile.fileId,
+            name: mainFile.fileName,
+            url: mainFile.fileUrl,
+            size: mainFile.fileSize,
+            type: mainFile.fileType || 'text/html',
+            source: 'single' as const,
+            html: /\.html?$/i.test(mainFile.fileName),
+            previewUrl: mainFile.previewUrl,
+            assetCount: data.zipAnalysis.assetCount,
+            hasAssets: data.zipAnalysis.assetCount > 0
+          };
+
+          addFiles([uploadedFile]);
+          setProgress(100);
+          openSingleCreativeView(uploadedFile);
+          return;
+        } else {
+          // Redirect to multiple creatives flow
+          console.log('ZIP contains multiple creatives, redirecting to multiple upload flow');
+          await handleMultipleFileUpload(file);
+          return;
+        }
+      }
+
+      // Regular single file upload (non-ZIP)
+      const uploaded = data.file;
+      if (!uploaded) {
+        throw new Error('Upload response missing file data');
+      }
+      
       const previewUrl = await makeThumb(file);
 
       const uploadedFile: UploadedFileMeta = {
@@ -225,23 +319,28 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       if (!r.ok) throw new Error(await r.text());
       const data: ZipUploadResponse = await r.json();
 
-      const mapped: UploadedFileMeta[] = (data.extractedFiles || []).map((f) => ({
-        id: f.fileId,
-        name: f.fileName,
-        url: f.fileUrl,
-        size: f.fileSize,
-        type: f.fileType || 'application/octet-stream',
-        source: 'zip' as const,
-        html: /\.html?$/i.test(f.fileName),
-        previewUrl: /\.(png|jpe?g|gif|webp)$/i.test(f.fileName) ? f.fileUrl : undefined,
-      }));
+      const mapped: UploadedFileMeta[] = (data.extractedFiles || []).map((f) => {
+        const isImageFile = /\.(png|jpe?g|gif|webp|svg)$/i.test(f.fileName);
+        return {
+          id: f.fileId,
+          name: f.fileName,
+          url: f.fileUrl,
+          size: f.fileSize,
+          type: f.fileType || 'application/octet-stream',
+          source: 'zip' as const,
+          html: /\.html?$/i.test(f.fileName),
+          // TODO: Once backend implements thumbnail generation, f.previewUrl will contain the thumbnail URL
+          // For now, fallback to original file URL for images (will show placeholder until backend is ready)
+          previewUrl: f.previewUrl || (isImageFile ? f.fileUrl : undefined),
+        };
+      });
 
       addFiles(mapped);
       setProgress(100);
       
-      // Open first file immediately (modal will close after this completes)
+      // Open MultipleCreativeView with all files (modal will close after this completes)
       if (mapped.length > 0) {
-        openSingleCreativeView(mapped[0]);
+        openMultipleCreativeView(mapped, file.name);
       }
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'ZIP extraction failed';
@@ -274,9 +373,12 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
 
   // Handle viewing uploaded files
   const handleViewUploadedFiles = () => {
-    // Show first file in SingleCreativeView or could show a list
-    if (uploadedFiles.length > 0) {
+    if (uploadedFiles.length === 1) {
+      // Single file - open SingleCreativeView
       openSingleCreativeView(uploadedFiles[0])
+    } else if (uploadedFiles.length > 1) {
+      // Multiple files - open MultipleCreativeView
+      openMultipleCreativeView(uploadedFiles)
     }
   }
 
@@ -291,6 +393,12 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const handleDeleteUploadedFiles = () => {
     setUploadedFiles([])
     setHasUploadedFiles(false)
+    setUploadedZipFileName('') // Clear ZIP filename when files are deleted
+    // Reset any upload-related state to ensure clean slate
+    setLastError(null)
+    setProgress(null)
+    // Close upload modal if it's open to reset its state
+    setIsUploadModalOpen(false)
   }
   
   // Handle priority change
@@ -311,6 +419,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     name: string;
     type: string;
     placeholder: string;
+    label?: string;
     options?: Array<{ label: string; value: string }>;
   }) => {
     if (field.type === 'select') {
@@ -368,14 +477,20 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       return (
         <Select value={formData[field.name as keyof typeof formData]} onValueChange={(value) => handleSelectChange(field.name, value)}>
           <SelectTrigger className="w-full h-12">
-            <SelectValue placeholder={field.placeholder} />
+            <SelectValue placeholder={field.placeholder || 'Select an option'} />
           </SelectTrigger>
           <SelectContent>
-            {field.options?.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
+            {field.options && field.options.length > 0 ? (
+              field.options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-sm text-color-muted-foreground text-center">
+                No options available
+              </div>
+            )}
           </SelectContent>
         </Select>
       )
@@ -422,7 +537,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     <div className="space-y-6">
       {/* Select Fields (Offer ID & Creative Type) */}
       <div className="space-y-4">
-        {selectFields.map((field) => (
+        {selectFields.filter(field => field && field.name).map((field) => (
           <div key={field.name} className="space-y-2">
             <Label htmlFor={field.name}>{field.label}</Label>
             {renderField(field)}
@@ -474,9 +589,18 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <File className="h-5 w-5 text-green-600" />
+                {uploadedZipFileName ? (
+                  <FileArchive className="h-5 w-5 text-green-600" />
+                ) : (
+                  <File className="h-5 w-5 text-green-600" />
+                )}
                 <div>
-                  <p className="font-medium text-green-800">{uploadedFiles.length === 1 ? uploadedFiles[0].name : `${uploadedFiles.length} Files Uploaded`}</p>
+                  <p className="font-medium text-green-800">
+                    {uploadedFiles.length === 1 
+                      ? uploadedFiles[0].name 
+                      : (uploadedZipFileName || `${uploadedFiles.length} Files Uploaded`)
+                    }
+                  </p>
                   <p className="text-sm text-green-600">
                     {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} • {uploadedFiles.reduce((total, file) => total + file.size, 0) > 0 ? formatFileSize(uploadedFiles.reduce((total, file) => total + file.size, 0)) : '0 B'}
                   </p>
@@ -510,6 +634,9 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
               variant="outline"
               className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
               onClick={() => {
+                // Reset any previous upload state
+                setLastError(null)
+                setProgress(null)
                 setCurrentUploadType('single')
                 setIsUploadModalOpen(true)
               }}
@@ -521,8 +648,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
             {/* Multiple Creatives - Always visible */}
             <Button
               variant="outline"
-              className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-400 hover:bg-blue-50 transition-all duration-200"
+              className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
               onClick={() => {
+                // Reset any previous upload state
+                setLastError(null)
+                setProgress(null)
                 setCurrentUploadType('multiple')
                 setIsUploadModalOpen(true)
               }}
@@ -636,7 +766,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       
       {/* Textarea Fields (Additional Notes) */}
       <div className="space-y-4">
-        {textareaFields.map((field) => (
+        {textareaFields.filter(field => field && field.name).map((field) => (
           <div key={field.name} className="space-y-2">
             <Label htmlFor={field.name}>{field.label}</Label>
             {renderField(field)}
@@ -670,6 +800,22 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
             setSelectedCreative(null)
           }}
           creative={selectedCreative}
+          onFileNameChange={handleFileNameChange}
+        />
+      )}
+      
+      {/* Multiple Creative View Modal */}
+      {selectedCreatives.length > 0 && (
+        <MultipleCreativeView
+          isOpen={isMultipleCreativeViewOpen}
+          onClose={() => {
+            setIsMultipleCreativeViewOpen(false)
+            setSelectedCreatives([])
+            setZipFileName('')
+          }}
+          creatives={selectedCreatives}
+          zipFileName={zipFileName}
+          onRemoveCreative={handleRemoveCreative}
           onFileNameChange={handleFileNameChange}
         />
       )}
