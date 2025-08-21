@@ -7,34 +7,83 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { File, FileArchive, PencilLine, Search } from 'lucide-react'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { FileUploadModal, UploadType, FromSubjectLinesModal } from '@/components/modals'
 
-const CreativeDetails = () => {
-  const [formData, setFormData] = useState({
-    offerId: '',
-    creativeType: '',
-    additionalNotes: '',
-    fromLines: '',
-    subjectLines: '',
-    priority: 'medium', // Default to medium (from constants)
-  })
+type UploadedFileMeta = {
+  id: string;           
+  name: string;
+  url: string;          
+  size: number;
+  type: string;
+  source?: 'single' | 'zip';
+  html?: boolean;       
+  previewUrl?: string;  
+};
+
+type UploadError = { scope: 'single' | 'zip'; message: string };
+
+interface CreativeDetailsProps {
+  formData: {
+    offerId: string;
+    creativeType: string;
+    additionalNotes: string;
+    fromLines: string;
+    subjectLines: string;
+    priority: string;
+  };
+  onDataChange: (data: Partial<CreativeDetailsProps['formData']>) => void;
+  onFilesChange?: (files: UploadedFileMeta[]) => void;
+}
+
+const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChange, onFilesChange }) => {
   
   const [offerSearchTerm, setOfferSearchTerm] = useState('')
+  const [offerOptions, setOfferOptions] = useState<Array<{label: string; value: string}>>([])
+  const [isLoadingOffers, setIsLoadingOffers] = useState(true)
   
-  // Modal state
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/everflow/offers', { cache: 'no-store' });
+        if (!res.ok) throw new Error(await res.text());
+        const offerIds = await res.json();
+        if (!isMounted) return;
+        const offers = offerIds.map((id: string) => ({ 
+          label: `Offer ID: ${id}`, 
+          value: id 
+        }));
+        setOfferOptions(offers);
+        setIsLoadingOffers(false);
+      } catch (e) {
+        console.error('Failed to fetch offers:', e);
+        if (!isMounted) return;
+        setOfferOptions([]);
+        setIsLoadingOffers(false);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, []);
+  
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [currentUploadType, setCurrentUploadType] = useState<UploadType>('single')
   const [isFromSubjectLinesModalOpen, setIsFromSubjectLinesModalOpen] = useState(false)
   
-  // Track if from/subject lines are saved
   const [hasFromSubjectLines, setHasFromSubjectLines] = useState(false)
+  
+  // File management state
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFileMeta[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState<number | null>(null)
+  const [lastError, setLastError] = useState<UploadError | null>(null)
+  
+  React.useEffect(() => {
+    onFilesChange?.(uploadedFiles);
+  }, [uploadedFiles, onFilesChange]);
 
   const handleSelectChange = (fieldName: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [fieldName]: value
-    }))
+    onDataChange({ [fieldName]: value })
     
     // Clear search term when offer is selected
     if (fieldName === 'offerId') {
@@ -44,121 +93,110 @@ const CreativeDetails = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    onDataChange({ [name]: value })
   }
+  
+  // File management helpers
+  const addFiles = (files: UploadedFileMeta[]) =>
+    setUploadedFiles(prev => [...prev, ...files])
+
+  const removeFile = (id: string) =>
+    setUploadedFiles(prev => prev.filter(f => f.id !== id))
+
+  const makeThumb = (file: File) =>
+    new Promise<string | undefined>((resolve) => {
+      if (!file.type.startsWith('image/')) return resolve(undefined)
+      const reader = new FileReader()
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : undefined)
+      reader.readAsDataURL(file)
+    })
+
+  const resetFeedback = () => { setLastError(null); setProgress(null) }
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    onDataChange({ [name]: value })
   }
   
-  // File upload handlers
-  const handleSingleFileUpload = (file: File) => {
-    console.log('Single file uploaded:', file.name)
-    // TODO: BACKEND INTEGRATION - Handle single file upload
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. This function receives a File object after successful upload
-    // 2. File object contains: name, size, type
-    // 3. You should have received fileId and fileUrl from upload API
-    // 4. Store file reference in form data for submission
-    // 5. Consider adding file preview/thumbnail
-    // 6. Validate file on client side before submission
-    // 7. Add file to form state: formData.uploadedFiles = [...formData.uploadedFiles, fileData]
-    // 8. Handle file removal if user wants to change selection
-    // 9. Show upload progress and success confirmation
-    // 10. Implement file type-specific preview (image preview, HTML preview, etc.)
-    //
-    // Expected file data structure:
-    // {
-    //   fileId: "uuid",
-    //   fileName: "creative.jpg",
-    //   fileUrl: "https://cdn.example.com/files/creative.jpg",
-    //   fileSize: 1024000,
-    //   fileType: "image/jpeg",
-    //   uploadDate: "2024-01-01T00:00:00Z"
-    // }
+    // File upload handlers
+  const handleSingleFileUpload = async (file: File) => {
+    resetFeedback();
+    try {
+      setUploading(true);
+      setProgress(5);
+
+      // send to your existing single upload endpoint
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/upload-url', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error(await r.text());
+      const { url } = await r.json();
+
+      const previewUrl = await makeThumb(file);
+
+      addFiles([{
+        id: crypto.randomUUID(),
+        name: file.name,
+        url,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        source: 'single',
+        html: /\.html?$/i.test(file.name),
+        previewUrl
+      }]);
+
+      setProgress(100);
+    } catch (e: unknown) {
+      setLastError({ scope: 'single', message: e instanceof Error ? e.message : 'Upload failed' });
+    } finally {
+      setUploading(false);
+      setTimeout(() => setProgress(null), 600);
+    }
   }
   
-  const handleMultipleFileUpload = (file: File) => {
-    console.log('Multiple files uploaded:', file.name)
-    // TODO: BACKEND INTEGRATION - Handle multiple file upload (ZIP file)
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. This function receives a ZIP file after successful upload
-    // 2. ZIP file should contain multiple creative files
-    // 3. Backend should extract ZIP and process individual files
-    // 4. Return array of extracted file information
-    // 5. Handle ZIP extraction errors gracefully
-    // 6. Validate each extracted file individually
-    // 7. Generate previews for each creative
-    // 8. Store file references in form data
-    // 9. Allow user to remove individual files from ZIP
-    // 10. Show extraction progress and file count
-    // 11. Handle mixed file types within ZIP
-    // 12. Implement file deduplication if needed
-    // 13. Add ZIP file size validation
-    // 14. Consider implementing batch processing
-    // 15. Add file organization within ZIP
-    //
-    // Expected ZIP extraction response:
-    // {
-    //   success: true,
-    //   zipFileId: "uuid",
-    //   extractedFiles: [
-    //     {
-    //       fileId: "uuid1",
-    //       fileName: "creative1.jpg",
-    //       fileUrl: "https://cdn.example.com/files/creative1.jpg",
-    //       fileSize: 512000,
-    //       fileType: "image/jpeg",
-    //       originalPath: "folder/creative1.jpg"
-    //     },
-    //     // ... more files
-    //   ],
-    //   totalFiles: 5,
-    //   extractionDate: "2024-01-01T00:00:00Z"
-    // }
+  const handleMultipleFileUpload = async (file: File) => {
+    resetFeedback();
+    try {
+      setUploading(true);
+      setProgress(5);
+
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/upload-zip', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+
+      const mapped: UploadedFileMeta[] = (data.extractedFiles || []).map((f: { fileId: string; fileName: string; fileUrl: string; fileSize: number; fileType?: string }) => ({
+        id: f.fileId,
+        name: f.fileName,
+        url: f.fileUrl,
+        size: f.fileSize,
+        type: f.fileType || 'application/octet-stream',
+        source: 'zip',
+        html: /\.html?$/i.test(f.fileName),
+        previewUrl: /\.(png|jpe?g|gif|webp)$/i.test(f.fileName) ? f.fileUrl : undefined,
+      }));
+
+      addFiles(mapped);
+      setProgress(100);
+    } catch (e: unknown) {
+      setLastError({ scope: 'zip', message: e instanceof Error ? e.message : 'ZIP extraction failed' });
+    } finally {
+      setUploading(false);
+      setTimeout(() => setProgress(null), 600);
+    }
   }
   
-  const handleFromSubjectLinesSave = (fromLines: string, subjectLines: string) => {
-    console.log('From Lines:', fromLines)
-    console.log('Subject Lines:', subjectLines)
-    // TODO: BACKEND INTEGRATION - Save from and subject lines
-    // 
-    // BACKEND DEVELOPER NOTES:
-    // 1. This function receives from lines and subject lines strings
-    // 2. Lines are separated by line breaks (\n)
-    // 3. Store in form data for final submission
-    // 4. Consider validation: max length, forbidden words, etc.
-    // 5. Add to form state: formData.fromLines, formData.subjectLines
-    // 6. Show confirmation to user
-    // 7. Allow editing before final submission
-    // 8. Consider auto-save functionality
-    // 9. Implement character count validation
-    // 10. Add preview functionality for email campaigns
-    //
-    // Expected data structure:
-    // {
-    //   fromLines: "John Smith <john@company.com>\nMarketing Team <marketing@company.com>",
-    //   Subject Lines: "Don't miss out on this amazing offer!\nLimited time: 50% off everything"
-    // }
-    
-    setFormData(prev => ({
-      ...prev,
-      fromLines,
-      subjectLines
-    }))
-    
-        // Set flag to show uploaded lines instead of upload buttons
-    setHasFromSubjectLines(true)
-  }
+     const handleFromSubjectLinesSave = (fromLines: string, subjectLines: string) => {
+     console.log('From Lines:', fromLines)
+     console.log('Subject Lines:', subjectLines)
+     
+     // Store from and subject lines in form data
+     onDataChange({ fromLines, subjectLines })
+     
+     // Set flag to show uploaded lines instead of upload buttons
+     setHasFromSubjectLines(true)
+   }
   
   // Handle viewing from/subject lines
   const handleViewFromSubjectLines = () => {
@@ -167,20 +205,13 @@ const CreativeDetails = () => {
   
   // Handle deleting from/subject lines
   const handleDeleteFromSubjectLines = () => {
-    setFormData(prev => ({
-      ...prev,
-      fromLines: '',
-      subjectLines: ''
-    }))
+    onDataChange({ fromLines: '', subjectLines: '' })
     setHasFromSubjectLines(false)
   }
   
   // Handle priority change
   const handlePriorityChange = (priority: string) => {
-    setFormData(prev => ({
-      ...prev,
-      priority
-    }))
+    onDataChange({ priority })
   }
   
   // Separate fields by type for proper ordering
@@ -201,12 +232,9 @@ const CreativeDetails = () => {
     if (field.type === 'select') {
       // Special handling for offer dropdown with search
       if (field.name === 'offerId') {
-        // TODO: BACKEND INTEGRATION - Move filtering to backend for better performance
-        // Current frontend filtering is for development only
-        // Backend should implement: GET /api/everflow/offers?search={searchTerm}
-        const filteredOptions = field.options?.filter(option =>
+        const filteredOptions = offerOptions.filter(option =>
           option.label.toLowerCase().includes(offerSearchTerm.toLowerCase())
-        ) || []
+        )
         
         return (
           <Select 
@@ -244,8 +272,7 @@ const CreativeDetails = () => {
                 ))
               ) : (
                 <div className="px-3 py-2 text-sm text-color-muted-foreground text-center">
-                  {/* TODO: BACKEND INTEGRATION - Handle loading states and API errors */}
-                  {offerSearchTerm ? 'No offers found' : 'Loading offers...'}
+                  {offerSearchTerm ? 'No offers found' : (isLoadingOffers ? 'Loading offers...' : 'No offers available')}
                 </div>
               )}
             </SelectContent>
@@ -394,11 +421,71 @@ const CreativeDetails = () => {
                 <span className="text-sm font-medium text-center">From & Subject Lines</span>
               </Button>
             )}
-          </div>
-        )}
-      </div>
-      
-      {/* Priority Toggle */}
+                     </div>
+         )}
+       </div>
+       
+       {/* Upload feedback */}
+       {(uploading || progress !== null || lastError) && (
+         <div className="mt-3 space-y-2">
+           {uploading && <p className="text-sm text-gray-600">Uploading…</p>}
+           {progress !== null && (
+             <div className="w-full bg-gray-200 rounded h-2 overflow-hidden">
+               <div className="bg-blue-500 h-2 transition-all" style={{ width: `${progress}%` }} />
+             </div>
+           )}
+           {lastError && (
+             <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+               {lastError.message}
+             </div>
+           )}
+         </div>
+       )}
+
+       {/* Uploaded files preview/list */}
+       {uploadedFiles.length > 0 && (
+         <div className="mt-4">
+           <div className="flex items-center justify-between mb-2">
+             <h4 className="text-sm font-semibold text-gray-800">
+               Uploaded Files ({uploadedFiles.length})
+             </h4>
+           </div>
+
+           <div className="grid gap-3 sm:grid-cols-2">
+             {uploadedFiles.map(f => (
+               <div key={f.id} className="flex items-center gap-3 p-3 rounded border bg-white">
+                 {/* thumbnail */}
+                 <div className="w-14 h-14 flex items-center justify-center bg-gray-100 rounded overflow-hidden">
+                   {f.previewUrl ? (
+                     <img src={f.previewUrl} alt={f.name} className="object-cover w-full h-full" />
+                   ) : f.html ? (
+                     <span className="text-xs text-gray-600">HTML</span>
+                   ) : (
+                     <span className="text-xs text-gray-600">FILE</span>
+                   )}
+                 </div>
+
+                 {/* meta */}
+                 <div className="min-w-0 flex-1">
+                   <p className="text-sm font-medium truncate">{f.name}</p>
+                   <p className="text-xs text-gray-500 truncate">{f.type} · {(f.size/1024).toFixed(1)} KB</p>
+                   <a href={f.url} target="_blank" className="text-xs text-blue-600 underline">Open</a>
+                 </div>
+
+                 {/* remove */}
+                 <button
+                   className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+                   onClick={() => removeFile(f.id)}
+                 >
+                   Remove
+                 </button>
+               </div>
+             ))}
+           </div>
+         </div>
+       )}
+       
+       {/* Priority Toggle */}
       <div className="space-y-3">
         <Label className="text-base font-medium text-gray-700">Set Priority</Label>
         <div className="flex bg-white border border-gray-300 rounded-lg p-1 w-fit shadow-sm">

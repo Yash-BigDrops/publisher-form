@@ -1,17 +1,21 @@
 "use client"
 
-import React, { useState } from 'react'
+import React from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Constants } from '@/app/Constants/Constants'
 
-const PersonalDetails = () => {
-  const [formData, setFormData] = useState({
-    affiliateId: '',
-    companyName: '',
-    firstName: '',
-    lastName: '',
-  })
+interface PersonalDetailsProps {
+  formData: {
+    affiliateId: string;
+    companyName: string;
+    firstName: string;
+    lastName: string;
+  };
+  onDataChange: (data: Partial<PersonalDetailsProps['formData']>) => void;
+}
+
+const PersonalDetails: React.FC<PersonalDetailsProps> = ({ formData, onDataChange }) => {
 
   // Filter only the personal detail fields from Constants
   const personalFields = Constants.formFields.filter(field => 
@@ -20,10 +24,7 @@ const PersonalDetails = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    onDataChange({ [name]: value })
   }
 
   return (

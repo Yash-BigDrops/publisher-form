@@ -3,12 +3,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import React, { useState } from 'react'
+import { TELEGRAM_BOT_URL } from '@/constants'
 
-const ContactDetails = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    telegramId: '',
-  })
+interface ContactDetailsProps {
+  formData: {
+    email: string;
+    telegramId: string;
+  };
+  onDataChange: (data: Partial<ContactDetailsProps['formData']>) => void;
+}
+
+const ContactDetails: React.FC<ContactDetailsProps> = ({ formData, onDataChange }) => {
   
   const [isTelegramFocused, setIsTelegramFocused] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
@@ -36,16 +41,10 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       processedValue = ''
     }
     
-    setFormData(prev => ({
-      ...prev,
-      [name]: processedValue
-    }))
+    onDataChange({ [name]: processedValue })
   } else {
     // Normal handling for other fields
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    onDataChange({ [name]: value })
   }
 }
 
@@ -63,10 +62,7 @@ const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // If user is trying to delete the "@" symbol, prevent it
     if (value.length === 2 && value.startsWith('@')) {
       e.preventDefault()
-      setFormData(prev => ({
-        ...prev,
-        [name]: '@'
-      }))
+      onDataChange({ [name]: '@' })
       return
     }
   }
@@ -81,10 +77,7 @@ const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     
     // Add @ when focusing on Telegram field if it's empty
     if (!formData.telegramId) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: '@'
-      }))
+      onDataChange({ [name]: '@' })
     }
   }
 }
@@ -98,10 +91,7 @@ const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     
     // Remove @ when losing focus if user hasn't entered anything meaningful
     if (value === '@' || value === '') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: ''
-      }))
+      onDataChange({ [name]: '' })
     }
   }
 }
@@ -113,54 +103,23 @@ const handleVerify = async () => {
   setVerificationAttempted(true)
   
   try {
-    // TODO: BACKEND INTEGRATION - Replace with actual API call
-    // const response = await fetch('/api/telegram/verify', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     'Authorization': `Bearer ${userToken}` // Add if authentication required
-    //   },
-    //   body: JSON.stringify({
-    //     telegramId: formData.telegramId,
-    //     userId: currentUserId, // Add if user context needed
-    //     timestamp: new Date().toISOString()
-    //   })
-    // })
+    await fetch('/api/telegram/poll', { method: 'POST' })
+
+    const res = await fetch('/api/telegram/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegramId: formData.telegramId }),
+    })
     
-    // TODO: BACKEND INTEGRATION - Handle API response
-    // if (!response.ok) {
-    //   throw new Error(`HTTP error! status: ${response.status}`)
-    // }
+    if (!res.ok) {
+      throw new Error('Verification request failed')
+    }
     
-    // const result = await response.json()
-    
-    // TODO: BACKEND INTEGRATION - Validate response structure
-    // if (result.success && result.data) {
-    //   setIsVerified(true)
-    //   // Store additional user info if needed
-    //   // setUserInfo(result.data.userInfo)
-    //   // setVerificationTimestamp(result.data.verifiedAt)
-    // } else {
-    //   throw new Error(result.message || 'Verification failed')
-    // }
-    
-    // TEMPORARY: Simulate verification for frontend testing
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    throw new Error('Telegram ID not found or invalid')
-    
-  } catch (error) {
-    console.error('Verification failed:', error)
+    const data = await res.json()
+    setIsVerified(Boolean(data.verified))
+  } catch (err) {
+    console.error('Verification failed:', err)
     setIsVerified(false)
-    
-    // TODO: BACKEND INTEGRATION - Handle specific error types
-    // if (error.message.includes('not found')) {
-    //   // Show specific error message for invalid ID
-    // } else if (error.message.includes('rate limit')) {
-    //   // Show rate limit warning
-    // } else {
-    //   // Show generic error message
-    // }
-    
   } finally {
     setIsVerifying(false)
   }
@@ -241,15 +200,9 @@ const handleVerify = async () => {
                   <li>Send /start to the bot</li>
                   <li>Come back and Verify again</li>
                 </ol>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  type="button"
-                  // TODO: BACKEND INTEGRATION - Replace with actual bot link
-                  // onClick={() => window.open(Constants.telegramBotUrl, '_blank')}
-                  className="text-xs w-max border-warning-medium text-warning-medium hover:bg-warning-medium hover:text-white"
-                >
-                  Start Bot
+                <Button asChild variant="outline" size="xs"
+                  className="text-xs w-max border-warning-medium text-warning-medium hover:bg-warning-medium hover:text-white">
+                  <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">Start Bot</a>
                 </Button>
               </div>
             )}
