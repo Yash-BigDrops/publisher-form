@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { FileText, Image, File, Minimize2, X, FileArchive } from 'lucide-react'
+import { FileText, Image, File, Minimize2, FileArchive } from 'lucide-react'
 import { formatFileSize, getFileType } from '@/constants'
 import SingleCreativeView from './SingleCreativeView'
 
@@ -282,23 +282,23 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
       <div className="bg-white w-full h-full flex flex-col animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-100 rounded-xl shadow-sm">
-              <FileArchive className="h-6 w-6 text-purple-600" />
+        {/* Header - Single Row Layout */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-blue-50 gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+            <div className="p-2 sm:p-3 bg-purple-100 rounded-xl shadow-sm flex-shrink-0">
+              <FileArchive className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" />
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900 mb-0.5 sm:mb-1 truncate">
                 {zipFileName || 'Multiple Creatives'}
               </h2>
-              <p className="text-sm text-gray-600 flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                   {creatives.length} files
                 </span>
-                <span>•</span>
-                <span>ZIP Archive</span>
-              </p>
+                <span className="text-gray-600 text-xs">•</span>
+                <span className="text-xs text-gray-600">ZIP Archive</span>
+              </div>
             </div>
           </div>
           
@@ -306,17 +306,17 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
             variant="default"
             size="sm"
             onClick={onClose}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-all duration-150 hover:shadow-md"
+            className="px-3 sm:px-4 lg:px-6 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-all duration-150 hover:shadow-md text-xs sm:text-sm flex-shrink-0"
           >
-            Save and Continue
+            <span>Save and Continue</span>
           </Button>
         </div>
 
-        {/* Content - Card-based Layout */}
+        {/* Content - Responsive Card Layout */}
         <div className="flex-1 overflow-hidden">
-          <div className="h-full p-6 bg-gray-50 overflow-y-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-              {creatives.map((creative, index) => {
+          <div className="h-full p-3 sm:p-4 lg:p-6 bg-gray-50 overflow-y-auto">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
+              {creatives.map((creative) => {
                 const fileType = getFileType(creative.name)
                 const isImage = fileType === 'image'
                 const isHtml = fileType === 'html'
@@ -367,29 +367,30 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                               onRemoveCreative(creative.id)
                             }
                           }}
-                          className="h-7 px-2 bg-white/95 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-xs font-medium shadow-sm"
+                          className="h-6 sm:h-7 px-1.5 sm:px-2 bg-white/95 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-xs font-medium shadow-sm"
                         >
-                          Remove
+                          <span className="hidden sm:inline">Remove</span>
+                          <span className="sm:hidden">×</span>
                         </Button>
                       </div>
                     </div>
                     
                     {/* Content Section */}
-                    <div className="p-4">
+                    <div className="p-3 sm:p-4">
                       {/* Filename and File Info */}
                       <div className="mb-3">
-                        <h3 className="font-medium text-gray-900 text-sm truncate mb-1" title={creative.name}>
+                        <h3 className="font-medium text-gray-900 text-xs sm:text-sm truncate mb-1" title={creative.name}>
                           {creative.name}
                         </h3>
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${
+                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full font-medium text-xs ${
                             isImage ? 'bg-blue-50 text-blue-600' :
                             isHtml ? 'bg-emerald-50 text-emerald-600' :
                             'bg-gray-50 text-gray-600'
                           }`}>
                             {fileType}
                           </span>
-                          <span className="font-medium">{formatFileSize(creative.size)}</span>
+                          <span className="font-medium text-xs">{formatFileSize(creative.size)}</span>
                         </div>
                       </div>
                       
@@ -398,9 +399,9 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                         onClick={() => {
                           openSingleCreativeView(creative)
                         }}
-                        className="w-full bg-blue-400 hover:bg-blue-600 text-white font-medium py-2 px-3 rounded-md text-sm transition-colors duration-200"
+                        className="w-full bg-blue-400 hover:bg-blue-600 text-white font-medium py-1.5 sm:py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm transition-colors duration-200"
                       >
-                        View Creative
+                        <span>View Creative</span>
                       </Button>
                     </div>
                   </div>
@@ -414,14 +415,14 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
       {/* Fullscreen HTML Editor Modal */}
       {isHtmlEditorFullscreen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200">
-          <div className="bg-white w-full h-full max-w-7xl max-h-[95vh] flex flex-col rounded-lg shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full h-full flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             {/* Fullscreen Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200 gap-3 sm:gap-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-100 rounded-lg">
                   <FileText className="h-5 w-5 text-orange-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-800">HTML Editor - {currentCreative?.name}</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">HTML Editor - {currentCreative?.name}</h2>
               </div>
               
               <div className="flex gap-2">
@@ -429,7 +430,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={toggleHtmlEditorFullscreen}
-                  className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors"
+                  className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors flex-1 sm:flex-initial"
                 >
                   <Minimize2 className="h-4 w-4" />
                   Exit Fullscreen
@@ -438,7 +439,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={handleSaveHtml}
-                  className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors"
+                  className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors flex-1 sm:flex-initial"
                 >
                   <FileText className="h-4 w-4" />
                   Save Changes
@@ -446,33 +447,33 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
               </div>
             </div>
 
-            {/* Fullscreen Content - Split View */}
-            <div className="flex-1 flex overflow-hidden">
-              {/* Left Side: HTML Editor */}
-              <div className="w-1/2 border-r border-gray-200 flex flex-col">
-                <div className="p-4 border-b border-gray-200">
-                  <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            {/* Fullscreen Content - Responsive Split View */}
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              {/* HTML Editor */}
+              <div className="lg:w-1/2 lg:border-r border-gray-200 flex flex-col min-h-0">
+                <div className="p-3 sm:p-4 border-b border-gray-200">
+                  <Label className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     HTML Code
                   </Label>
                 </div>
-                <div className="flex-1 p-4">
+                <div className="flex-1 p-3 sm:p-4">
                   <Textarea
                     value={htmlContent}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlContent(e.target.value)}
                     placeholder="Edit your HTML code here..."
-                    className="w-full h-full resize-none text-sm font-mono border-gray-300 focus:border-orange-500 focus:ring-orange-500/20"
+                    className="w-full h-full resize-none text-xs sm:text-sm font-mono border-gray-300 focus:border-orange-500 focus:ring-orange-500/20"
                   />
                 </div>
               </div>
 
-              {/* Right Side: Live Preview */}
-              <div className="w-1/2 flex flex-col">
-                <div className="p-4 border-b border-gray-200">
-                  <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              {/* Live Preview */}
+              <div className="lg:w-1/2 flex flex-col min-h-0 border-t lg:border-t-0 border-gray-200">
+                <div className="p-3 sm:p-4 border-b border-gray-200">
+                  <Label className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Live Preview
                   </Label>
                 </div>
-                <div className="flex-1 bg-gray-50">
+                <div className="flex-1 bg-gray-50 min-h-[300px] lg:min-h-0">
                   <iframe
                     srcDoc={htmlContent || '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif;color:#666;"><p>HTML content will appear here</p></div>'}
                     title="HTML Preview - Fullscreen"
@@ -489,24 +490,24 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
       {/* Fullscreen Image Preview Modal */}
       {isImagePreviewFullscreen && currentCreative && getFileType(currentCreative.name) === 'image' && currentCreative.previewUrl && (
         <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200">
-          <div className="relative w-full h-full flex items-center justify-center p-8">
+          <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8">
             {/* Exit Fullscreen Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={toggleImagePreviewFullscreen}
-              className="absolute top-6 right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
+              className="absolute top-3 sm:top-6 right-3 sm:right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
             >
               <Minimize2 className="h-4 w-4" />
-              Exit Fullscreen
+              <span>Exit Fullscreen</span>
             </Button>
             
             {/* Header with filename */}
-            <div className="absolute top-6 left-6 flex items-center gap-3 text-white z-10">
+            <div className="absolute top-3 sm:top-6 left-3 sm:left-6 flex items-center gap-3 text-white z-10">
               <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                <Image className="h-5 w-5" />
+                <Image className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <h2 className="text-lg font-semibold">{currentCreative?.name}</h2>
+              <h2 className="text-sm sm:text-lg font-semibold truncate max-w-[200px] sm:max-w-none">{currentCreative?.name}</h2>
             </div>
 
             {/* Fullscreen Image */}

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { X, Edit3, Eye, FileText, Image, File, Sparkles, Maximize2, Minimize2 } from 'lucide-react'
+import { Edit3, Eye, FileText, Image, File, Sparkles, Maximize2, Minimize2, Check, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { formatFileSize, getFileType } from '@/constants'
 import { Constants } from '@/app/Constants/Constants'
 
@@ -31,11 +31,17 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   onFileNameChange
 }) => {
   const [editableFileName, setEditableFileName] = useState(creative.name)
+  const [editableNameOnly, setEditableNameOnly] = useState(() => {
+    const lastDotIndex = creative.name.lastIndexOf('.')
+    return lastDotIndex > 0 ? creative.name.substring(0, lastDotIndex) : creative.name
+  })
   const [isEditing, setIsEditing] = useState(false)
   const [fromLines, setFromLines] = useState('')
   const [subjectLines, setSubjectLines] = useState('')
   const [isHtmlEditorFullscreen, setIsHtmlEditorFullscreen] = useState(false)
   const [isImagePreviewFullscreen, setIsImagePreviewFullscreen] = useState(false)
+  const [isHtmlPreviewFullscreen, setIsHtmlPreviewFullscreen] = useState(false)
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
   
   // Proofreading data state
   const [proofreadingData, setProofreadingData] = useState<{
@@ -92,13 +98,118 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     }
   }, [isOpen])
 
+  // Function to fetch HTML content from uploaded file
+  const fetchHtmlContent = React.useCallback(async () => {
+    try {
+      console.log('Fetching HTML content from:', creative.url)
+      console.log('Creative type:', creative.type)
+      console.log('Creative name:', creative.name)
+      console.log('Creative ID:', creative.id)
+      
+      // First, try to get the file content from our API endpoint with asset processing
+      console.log('Trying API endpoint with asset processing...')
+      const encodedFileUrl = encodeURIComponent(creative.url)
+      const apiResponse = await fetch(`/api/get-file-content?fileId=${creative.id}&fileUrl=${encodedFileUrl}&processAssets=true`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      })
+      
+      if (apiResponse.ok) {
+        const htmlText = await apiResponse.text()
+        console.log('HTML content loaded via API, length:', htmlText.length)
+        console.log('First 200 characters:', htmlText.substring(0, 200))
+        setHtmlContent(htmlText)
+        return
+      } else {
+        console.log('API response not OK, status:', apiResponse.status)
+        const errorText = await apiResponse.text()
+        console.log('API error response:', errorText)
+      }
+      
+      // If API fails, try to fetch directly from the uploaded URL
+      console.log('API failed, trying direct URL fetch...')
+      const directResponse = await fetch(creative.url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+        mode: 'cors',
+      })
+      
+      console.log('Direct response status:', directResponse.status)
+      
+      if (directResponse.ok) {
+        const htmlText = await directResponse.text()
+        console.log('HTML content loaded directly, length:', htmlText.length)
+        console.log('First 200 characters:', htmlText.substring(0, 200))
+        setHtmlContent(htmlText)
+      } else {
+        // Final fallback
+        console.log('All methods failed, using fallback content')
+        await tryAlternativeHtmlLoading()
+      }
+    } catch (error) {
+      console.log('Fetch error, trying alternative approach...')
+      console.error('Error details:', error)
+      // Try alternative approach
+      await tryAlternativeHtmlLoading()
+    }
+  }, [creative.url, creative.type, creative.name, creative.id])
+
+  // Alternative approach to load HTML content
+  const tryAlternativeHtmlLoading = async () => {
+    console.log('Using fallback HTML content...')
+    // Provide a helpful fallback message with instructions
+    const fallbackContent = `<!-- HTML Content Loading Failed -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Creative Editor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .message {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #ff6b6b;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="message">
+        <h3>⚠️ Unable to load original HTML content</h3>
+        <p>You can start editing by replacing this content with your HTML code.</p>
+        <p><strong>Tips:</strong></p>
+        <ul>
+            <li>Paste your HTML code directly into the editor</li>
+            <li>The preview will update automatically as you type</li>
+            <li>Click "Save Changes" to save your edits</li>
+            <li>Click "Refresh Content" to try loading the original file again</li>
+        </ul>
+    </div>
+</body>
+</html>`
+    
+    setHtmlContent(fallbackContent)
+  }
+
   // Load HTML content when modal opens for HTML creatives
   React.useEffect(() => {
     if (isOpen && creative.type && (creative.type.includes('html') || creative.name.toLowerCase().includes('.html'))) {
       console.log('Loading HTML content for HTML creative...')
       fetchHtmlContent()
     }
-  }, [isOpen, creative.type, creative.name])
+  }, [isOpen, creative.type, creative.name, fetchHtmlContent])
 
   // TODO: BACKEND INTEGRATION - HTML Content Loading & Image Hosting
   // 
@@ -246,111 +357,6 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   // 4. Enhance /api/files endpoint for nested paths
   // 5. Add comprehensive error handling
   // 6. Implement caching and performance optimizations
-  
-  // Function to fetch HTML content from uploaded file
-  const fetchHtmlContent = async () => {
-    try {
-      console.log('Fetching HTML content from:', creative.url)
-      console.log('Creative type:', creative.type)
-      console.log('Creative name:', creative.name)
-      console.log('Creative ID:', creative.id)
-      
-      // First, try to get the file content from our API endpoint with asset processing
-      console.log('Trying API endpoint with asset processing...')
-      const encodedFileUrl = encodeURIComponent(creative.url)
-      const apiResponse = await fetch(`/api/get-file-content?fileId=${creative.id}&fileUrl=${encodedFileUrl}&processAssets=true`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      })
-      
-      if (apiResponse.ok) {
-        const htmlText = await apiResponse.text()
-        console.log('HTML content loaded via API, length:', htmlText.length)
-        console.log('First 200 characters:', htmlText.substring(0, 200))
-        setHtmlContent(htmlText)
-        return
-      } else {
-        console.log('API response not OK, status:', apiResponse.status)
-        const errorText = await apiResponse.text()
-        console.log('API error response:', errorText)
-      }
-      
-      // If API fails, try to fetch directly from the uploaded URL
-      console.log('API failed, trying direct URL fetch...')
-      const directResponse = await fetch(creative.url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        mode: 'cors',
-      })
-      
-      console.log('Direct response status:', directResponse.status)
-      
-      if (directResponse.ok) {
-        const htmlText = await directResponse.text()
-        console.log('HTML content loaded directly, length:', htmlText.length)
-        console.log('First 200 characters:', htmlText.substring(0, 200))
-        setHtmlContent(htmlText)
-      } else {
-        // Final fallback
-        console.log('All methods failed, using fallback content')
-        await tryAlternativeHtmlLoading()
-      }
-    } catch (error) {
-      console.log('Fetch error, trying alternative approach...')
-      console.error('Error details:', error)
-      // Try alternative approach
-      await tryAlternativeHtmlLoading()
-    }
-  }
-
-  // Alternative approach to load HTML content
-  const tryAlternativeHtmlLoading = async () => {
-    console.log('Using fallback HTML content...')
-    // Provide a helpful fallback message with instructions
-    const fallbackContent = `<!-- HTML Content Loading Failed -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HTML Creative Editor</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            background: #f5f5f5;
-            color: #333;
-        }
-        .message {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #ff6b6b;
-            margin: 20px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="message">
-        <h3>⚠️ Unable to load original HTML content</h3>
-        <p>You can start editing by replacing this content with your HTML code.</p>
-        <p><strong>Tips:</strong></p>
-        <ul>
-            <li>Paste your HTML code directly into the editor</li>
-            <li>The preview will update automatically as you type</li>
-            <li>Click "Save Changes" to save your edits</li>
-            <li>Click "Refresh Content" to try loading the original file again</li>
-        </ul>
-    </div>
-</body>
-</html>`
-    
-    setHtmlContent(fallbackContent)
-  }
 
   if (!isOpen) return null
 
@@ -368,42 +374,49 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
 
 
   const handleFileNameSave = () => {
-    // Validate filename (must have extension)
-    const lastDotIndex = editableFileName.lastIndexOf('.')
-    if (lastDotIndex === -1) {
-      // No extension found, add the original extension
-      const originalExtension = creative.name.substring(creative.name.lastIndexOf('.'))
-      const newFileName = editableFileName + originalExtension
-      setEditableFileName(newFileName)
-      // Update the creative object to reflect changes everywhere
-      creative.name = newFileName
+    // Validate that the name part is not empty
+    if (!editableNameOnly.trim()) {
+      // Don't save empty names
       return
     }
 
-    // Check if extension was changed (should not allow)
+    // Construct the full filename with the original extension
     const originalExtension = creative.name.substring(creative.name.lastIndexOf('.'))
-    const newExtension = editableFileName.substring(lastDotIndex)
+    const newFileName = editableNameOnly.trim() + originalExtension
     
-    if (newExtension !== originalExtension) {
-      // Extension changed, revert to original extension
-      const nameWithoutExtension = editableFileName.substring(0, lastDotIndex)
-      const correctedFileName = nameWithoutExtension + originalExtension
-      setEditableFileName(correctedFileName)
-      // Update the creative object
-      creative.name = correctedFileName
-      return
-    }
-
-    // Filename is valid, update everywhere
-    creative.name = editableFileName
+    // Update both state variables
+    setEditableFileName(newFileName)
+    
+    // Update the creative object to reflect changes everywhere
+    creative.name = newFileName
     
     // Notify parent component about filename change
-    onFileNameChange?.(creative.id, editableFileName)
+    onFileNameChange?.(creative.id, newFileName)
     
     // TODO: Make API call to update filename on server
-    console.log('Saving new filename:', editableFileName)
+    console.log('Saving new filename:', newFileName)
     
     setIsEditing(false)
+  }
+
+  const handleFileNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nameOnly = e.target.value
+    setEditableNameOnly(nameOnly)
+    
+    // Update the full filename with extension
+    const extension = creative.name.substring(creative.name.lastIndexOf('.'))
+    setEditableFileName(nameOnly + extension)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleFileNameSave()
+    } else if (e.key === 'Escape') {
+      setEditableFileName(creative.name)
+      const lastDotIndex = creative.name.lastIndexOf('.')
+      setEditableNameOnly(lastDotIndex > 0 ? creative.name.substring(0, lastDotIndex) : creative.name)
+      setIsEditing(false)
+    }
   }
 
   // TODO: BACKEND INTEGRATION - LLM Content Generation
@@ -545,19 +558,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     })
   }
 
-  const handleApplyAllFixes = async () => {
-    // TODO: Implement automatic fixes application
-    // 1. Show loading state
-    // 2. Apply all grammar/spelling corrections
-    // 3. Update fromLines and subjectLines with corrections
-    // 4. Clear resolved issues from proofreadingData
-    // 5. Show success feedback
-    
-    console.log('Applying all fixes for creative:', creative.id)
-    
-    // Placeholder for backend integration
-    // This would update the actual content fields with corrections
-  }
+
 
   // TODO: BACKEND INTEGRATION - HTML Editor Functions
   const handleSaveHtml = async () => {
@@ -641,43 +642,128 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     setIsHtmlEditorFullscreen(!isHtmlEditorFullscreen)
   }
 
+  // HTML Preview fullscreen toggle
+  const toggleHtmlPreviewFullscreen = () => {
+    setIsHtmlPreviewFullscreen(!isHtmlPreviewFullscreen)
+  }
+
   // Image Preview fullscreen toggle
   const toggleImagePreviewFullscreen = () => {
     setIsImagePreviewFullscreen(!isImagePreviewFullscreen)
   }
 
+  // Preview collapse toggle
+  const togglePreviewCollapse = () => {
+    setIsPreviewCollapsed(!isPreviewCollapsed)
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
       <div className="bg-white w-full h-full flex flex-col animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-color-border">
-          <div className="flex items-center gap-3">
-            {isImage ? (
-              <Image className="h-6 w-6 text-blue-500" />
-            ) : isHtml ? (
-              <FileText className="h-6 w-6 text-green-500" />
-            ) : (
-              <File className="h-6 w-6 text-gray-500" />
-            )}
-            <h2 className="text-lg font-medium text-gray-900 truncate">
-              {creative.name}
-            </h2>
+        {/* Header with File Details - Left-Right Layout */}
+        <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b border-color-border bg-gray-50 gap-3 sm:gap-4 lg:gap-6">
+          {/* Left Side: File Information Group */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            {/* File Icon */}
+            <div className="flex-shrink-0">
+              {isImage ? (
+                <Image className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
+              ) : isHtml ? (
+                <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
+              ) : (
+                <File className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500" />
+              )}
+            </div>
+            
+            {/* Filename Section */}
+            <div className="min-w-0">
+              {isEditing ? (
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="flex items-center">
+                    <Input
+                      value={editableNameOnly}
+                      onChange={handleFileNameChange}
+                      onKeyDown={handleKeyDown}
+                      className="text-xs sm:text-sm font-medium h-6 sm:h-7 w-24 sm:w-32 md:w-40 rounded-r-none border-r-0"
+                      autoFocus
+                      placeholder="Filename"
+                    />
+                    <span className="text-xs text-gray-500 font-mono px-1 sm:px-2 py-1 h-6 sm:h-7 bg-gray-100 rounded-r border border-l-0 border-gray-300 flex items-center whitespace-nowrap">
+                      {creative.name.substring(creative.name.lastIndexOf('.'))}
+                    </span>
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleFileNameSave}
+                    className="p-1 h-6 w-6 sm:h-7 sm:w-7 bg-green-600 hover:bg-green-700 flex items-center justify-center"
+                  >
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditableFileName(creative.name)
+                      const lastDotIndex = creative.name.lastIndexOf('.')
+                      setEditableNameOnly(lastDotIndex > 0 ? creative.name.substring(0, lastDotIndex) : creative.name)
+                      setIsEditing(false)
+                    }}
+                    className="p-1 h-6 w-6 sm:h-7 sm:w-7 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 flex items-center justify-center"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs sm:text-sm font-medium text-gray-800 max-w-[120px] sm:max-w-[160px] md:max-w-[200px] truncate">
+                    {editableFileName}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const lastDotIndex = editableFileName.lastIndexOf('.')
+                      setEditableNameOnly(lastDotIndex > 0 ? editableFileName.substring(0, lastDotIndex) : editableFileName)
+                      setIsEditing(true)
+                    }}
+                    className="p-0.5 h-5 w-5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors flex-shrink-0"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* File Metadata Group - On Left Side */}
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded border border-purple-200">
+                {creative.type?.split('/')[1] || 'File'}
+              </span>
+              <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-700 text-xs font-medium rounded border border-green-200">
+                {formatFileSize(creative.size)}
+              </span>
+            </div>
           </div>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onClose}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-150"
-          >
-            Save and Continue
-          </Button>
+          
+          {/* Right Side: Save Button */}
+          <div className="flex-shrink-0">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onClose}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-150 text-xs sm:text-sm"
+            >
+              <span>Save and Continue</span>
+            </Button>
+          </div>
         </div>
 
-        {/* Content - Three Column Layout */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Column 1: Creative Preview - 25% */}
-          <div className="w-1/4 border-r border-color-border p-6 bg-gray-50 flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-5">
+        {/* Content - Responsive Layout */}
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+          {/* Column 1: Creative Preview - Collapsible on mobile/tablet */}
+          <div className={`${isPreviewCollapsed ? 'hidden lg:flex' : 'flex'} lg:w-1/2 lg:border-r border-color-border p-4 sm:p-6 bg-gray-50 flex-col min-h-0`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-gray-200 mb-5 gap-3 sm:gap-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <Eye className="h-5 w-5 text-blue-600" />
@@ -685,21 +771,46 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                 <h3 className="text-lg font-semibold text-gray-800">Preview</h3>
               </div>
               
-              {/* Fullscreen button - Only show for images */}
-              {isImage && creative.previewUrl && (
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                {/* Collapse/Expand button - Only on mobile/tablet */}
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={toggleImagePreviewFullscreen}
-                  className="flex items-center gap-2 text-blue-700 border-blue-300 hover:bg-blue-50 hover:text-blue-800 transition-colors"
+                  onClick={togglePreviewCollapse}
+                  className="lg:hidden flex items-center gap-2 text-gray-700 border-gray-300 hover:bg-gray-50 hover:text-gray-800 transition-colors"
                 >
-                  <Maximize2 className="h-4 w-4" />
-                  Fullscreen
+                  <ChevronUp className="h-4 w-4" />
+                  <span>Collapse</span>
                 </Button>
-              )}
+                
+                {/* Fullscreen button - Show for images and HTML */}
+                {(isImage && creative.previewUrl) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleImagePreviewFullscreen}
+                    className="flex items-center gap-2 text-blue-700 border-blue-300 hover:bg-blue-50 hover:text-blue-800 transition-colors flex-1 sm:flex-initial"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    <span>Fullscreen</span>
+                  </Button>
+                )}
+                {isHtml && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleHtmlPreviewFullscreen}
+                    className="flex items-center gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 transition-colors flex-1 sm:flex-initial"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    <span>Fullscreen</span>
+                  </Button>
+                )}
+              </div>
             </div>
             
-            <div className="flex-1 bg-white border border-gray-200 rounded-lg overflow-auto">
+            <div className="flex-1 bg-white border border-gray-200 rounded-lg overflow-auto min-h-[300px] lg:min-h-0">
               {/* 
                 TODO: CRITICAL BUG FIX - Image Preview Not Working from MultipleCreativeView
                 
@@ -808,26 +919,41 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
             </div>
           </div>
 
-          {/* Column 2: Features - 50% */}
-          <div className="w-1/2 border-r border-color-border p-6 overflow-y-auto bg-gray-50">
+          {/* Column 2: Features - Expanded when preview collapsed */}
+          <div className={`${isPreviewCollapsed ? 'w-full' : 'lg:w-1/2'} p-4 sm:p-6 overflow-y-auto bg-gray-50 border-t lg:border-t-0 border-color-border lg:border-l-0`}>
             <div className="space-y-5">
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-purple-600" />
+              <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <FileText className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800">Features</h3>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800">Features</h3>
+                
+                {/* Show expand button when preview is collapsed (mobile/tablet only) */}
+                {isPreviewCollapsed && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={togglePreviewCollapse}
+                    className="lg:hidden flex items-center gap-2 text-blue-700 border-blue-300 hover:bg-blue-50 hover:text-blue-800 transition-colors"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                    <span>Show Preview</span>
+                  </Button>
+                )}
               </div>
               
               <div className="space-y-4">
                 {/* HTML Editor Container - Only show for HTML creatives */}
                 {isHtml && (
-                  <div className="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4">
+                  <div className="p-4 sm:p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-gray-200 mb-4 gap-3 sm:gap-0">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-orange-100 rounded-lg">
                           <FileText className="h-5 w-5 text-orange-600" />
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-800">HTML Editor</h3>
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-800">HTML Editor</h3>
                       </div>
                       
                       <div className="flex gap-2">
@@ -835,19 +961,20 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                           variant="outline"
                           size="sm"
                           onClick={toggleHtmlEditorFullscreen}
-                          className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors"
+                          className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors flex-1 sm:flex-initial"
                         >
                           <Maximize2 className="h-4 w-4" />
-                          Fullscreen
+                          <span className="hidden sm:inline">Fullscreen</span>
+                          <span className="sm:hidden">Full</span>
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={handleSaveHtml}
-                          className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors"
+                          className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors flex-1 sm:flex-initial"
                         >
                           <FileText className="h-4 w-4" />
-                          Save Changes
+                          <span>Save Changes</span>
                         </Button>
                       </div>
                     </div>
@@ -861,8 +988,8 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                           value={htmlContent}
                           onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlContent(e.target.value)}
                           placeholder="Edit your HTML code here..."
-                          rows={12}
-                          className="w-full resize-none text-sm font-mono border-gray-500 focus:border-orange-500 focus:ring-orange-500/20"
+                          rows={8}
+                          className="w-full resize-none text-xs sm:text-sm font-mono border-gray-500 focus:border-orange-500 focus:ring-orange-500/20"
                         />
                         <p className="text-xs text-gray-500 mt-2">
                           Make changes to your HTML creative. The preview will update automatically.
@@ -873,23 +1000,24 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                 )}
 
                 {/* Email Content Group */}
-                <div className="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4">
+                <div className="p-4 sm:p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-gray-200 mb-4 gap-3 sm:gap-0">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-green-100 rounded-lg">
                         <FileText className="h-5 w-5 text-green-600" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-800">Email Content</h3>
+                      <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Email Content</h3>
                     </div>
                     
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleGenerateContent}
-                      className="flex items-center gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 transition-colors"
+                      className="flex items-center gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 transition-colors w-full sm:w-auto"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Generate From & Subject Lines
+                      <span className="hidden sm:inline">Generate From & Subject Lines</span>
+                      <span className="sm:hidden">Generate Content</span>
                     </Button>
                   </div>
                   
@@ -904,7 +1032,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFromLines(e.target.value)}
                         placeholder={Constants.fromSubjectLinesConfig.fromLines.placeholder}
                         rows={3}
-                        className="w-full resize-none text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500/20"
+                        className="w-full resize-none text-xs sm:text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500/20"
                       />
                       <p className="text-xs text-gray-500 mt-2">
                         {Constants.fromSubjectLinesConfig.fromLines.helpText}
@@ -921,7 +1049,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                         onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSubjectLines(e.target.value)}
                         placeholder={Constants.fromSubjectLinesConfig.subjectLines.placeholder}
                         rows={3}
-                        className="w-full resize-none text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500/20"
+                        className="w-full resize-none text-xs sm:text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500/20"
                       />
                       <p className="text-xs text-gray-500 mt-2">
                         {Constants.fromSubjectLinesConfig.subjectLines.helpText}
@@ -1073,23 +1201,24 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     }
                   }
                 */}
-                <div className="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4">
+                <div className="p-4 sm:p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-gray-200 mb-4 gap-3 sm:gap-0">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-amber-100 rounded-lg">
                         <FileText className="h-5 w-5 text-amber-600" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-800">Proofreading & Optimization</h3>
+                      <h3 className="text-sm sm:text-lg font-semibold text-gray-800">Proofreading & Optimization</h3>
                     </div>
                     
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={handleRegenerateAnalysis}
-                      className="flex items-center gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition-colors"
+                      className="flex items-center gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition-colors w-full sm:w-auto"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Analyze Creative
+                      <span className="hidden sm:inline">Analyze Creative</span>
+                      <span className="sm:hidden">Analyze</span>
                     </Button>
                   </div>
                   
@@ -1156,101 +1285,6 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                         )}
                       </div>
                     </div>
-
-
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-          {/* Column 3: File Details - 25% */}
-          <div className="w-1/4 p-6 overflow-y-auto bg-gray-50">
-            <div className="space-y-5">
-              <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <File className="h-5 w-5 text-blue-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800">File Details</h3>
-              </div>
-              
-              <div className="space-y-5">
-                {/* Editable Filename */}
-                <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">Filename</Label>
-                  <div className="space-y-2">
-                    {isEditing ? (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            value={editableFileName.substring(0, editableFileName.lastIndexOf('.'))}
-                            onChange={(e) => {
-                              const extension = editableFileName.substring(editableFileName.lastIndexOf('.'))
-                              setEditableFileName(e.target.value + extension)
-                            }}
-                            className="flex-1 text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500/20"
-                            autoFocus
-                          />
-                          <span className="text-sm text-gray-500 font-mono px-2 py-2 bg-gray-100 rounded border">
-                            {editableFileName.substring(editableFileName.lastIndexOf('.'))}
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={handleFileNameSave}
-                            className="px-3 py-1 h-8 text-xs bg-blue-600 hover:bg-blue-700"
-                          >
-                            Save
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditableFileName(creative.name)
-                              setIsEditing(false)
-                            }}
-                            className="px-3 py-1 h-8 text-xs border-gray-300 hover:bg-gray-50"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <p className="flex-1 text-sm text-gray-800 font-medium truncate bg-gray-50 px-3 py-2 rounded border">
-                          {editableFileName}
-                        </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setIsEditing(true)}
-                          className="p-2 h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* File Type */}
-                <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">File Type</Label>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-2 bg-purple-100 text-purple-800 text-sm font-medium rounded-md border border-purple-200">
-                      {creative.type || 'Unknown'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* File Size */}
-                <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                  <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">File Size</Label>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-2 bg-green-100 text-green-800 text-sm font-medium rounded-md border border-green-200">
-                      {formatFileSize(creative.size)}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -1262,14 +1296,14 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       {/* Fullscreen HTML Editor Modal */}
       {isHtmlEditorFullscreen && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200">
-          <div className="bg-white w-full h-full max-w-7xl max-h-[95vh] flex flex-col rounded-lg shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white w-full h-full flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             {/* Fullscreen Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200 gap-3 sm:gap-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-100 rounded-lg">
                   <FileText className="h-5 w-5 text-orange-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-800">HTML Editor - {creative.name}</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">HTML Editor - {creative.name}</h2>
               </div>
               
               <div className="flex gap-2">
@@ -1277,50 +1311,50 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={toggleHtmlEditorFullscreen}
-                  className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors"
+                  className="flex items-center gap-2 text-purple-700 border-purple-300 hover:bg-purple-50 hover:text-purple-800 transition-colors flex-1 sm:flex-initial"
                 >
                   <Minimize2 className="h-4 w-4" />
-                  Exit Fullscreen
+                  <span>Exit Fullscreen</span>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleSaveHtml}
-                  className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors"
+                  className="flex items-center gap-2 text-orange-700 border-orange-300 hover:bg-orange-50 hover:text-orange-800 transition-colors flex-1 sm:flex-initial"
                 >
                   <FileText className="h-4 w-4" />
-                  Save Changes
+                  <span>Save Changes</span>
                 </Button>
               </div>
             </div>
 
-            {/* Fullscreen Content - Split View */}
-            <div className="flex-1 flex overflow-hidden">
-              {/* Left Side: HTML Editor */}
-              <div className="w-1/2 border-r border-gray-200 flex flex-col">
-                <div className="p-4 border-b border-gray-200">
-                  <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            {/* Fullscreen Content - Responsive Split View */}
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              {/* HTML Editor */}
+              <div className="lg:w-1/2 lg:border-r border-gray-200 flex flex-col min-h-0">
+                <div className="p-3 sm:p-4 border-b border-gray-200">
+                  <Label className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     HTML Code
                   </Label>
                 </div>
-                <div className="flex-1 p-4">
+                <div className="flex-1 p-3 sm:p-4">
                   <Textarea
                     value={htmlContent}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlContent(e.target.value)}
                     placeholder="Edit your HTML code here..."
-                    className="w-full h-full resize-none text-sm font-mono border-gray-300 focus:border-orange-500 focus:ring-orange-500/20"
+                    className="w-full h-full resize-none text-xs sm:text-sm font-mono border-gray-300 focus:border-orange-500 focus:ring-orange-500/20"
                   />
                 </div>
               </div>
 
-              {/* Right Side: Live Preview */}
-              <div className="w-1/2 flex flex-col">
-                <div className="p-4 border-b border-gray-200">
-                  <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              {/* Live Preview */}
+              <div className="lg:w-1/2 flex flex-col min-h-0 border-t lg:border-t-0 border-gray-200">
+                <div className="p-3 sm:p-4 border-b border-gray-200">
+                  <Label className="text-xs sm:text-sm font-semibold text-gray-700 uppercase tracking-wide">
                     Live Preview
                   </Label>
                 </div>
-                <div className="flex-1 bg-gray-50">
+                <div className="flex-1 bg-gray-50 min-h-[300px] lg:min-h-0">
                   <iframe
                     srcDoc={htmlContent || '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif;color:#666;"><p>HTML content will appear here</p></div>'}
                     title="HTML Preview - Fullscreen"
@@ -1328,6 +1362,45 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     sandbox="allow-scripts allow-same-origin"
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen HTML Preview Modal */}
+      {isHtmlPreviewFullscreen && isHtml && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+          <div className="bg-white w-full h-full flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
+            {/* Fullscreen Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200 gap-3 sm:gap-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <FileText className="h-5 w-5 text-green-600" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">HTML Preview - {creative.name}</h2>
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleHtmlPreviewFullscreen}
+                className="flex items-center gap-2 text-green-700 border-green-300 hover:bg-green-50 hover:text-green-800 transition-colors w-full sm:w-auto"
+              >
+                <Minimize2 className="h-4 w-4" />
+                <span>Exit Fullscreen</span>
+              </Button>
+            </div>
+
+            {/* Fullscreen Content - Full Width Preview */}
+            <div className="flex-1 bg-gray-50 p-3 sm:p-6">
+              <div className="w-full h-full bg-white rounded-lg shadow-sm border border-gray-200">
+                <iframe
+                  srcDoc={htmlContent || '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif;color:#666;"><p>HTML content will appear here</p></div>'}
+                  title="HTML Preview - Fullscreen"
+                  className="w-full h-full border-0 rounded-lg"
+                  sandbox="allow-scripts allow-same-origin"
+                />
               </div>
             </div>
           </div>
@@ -1343,24 +1416,24 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       */}
       {isImagePreviewFullscreen && isImage && creative.previewUrl && (
         <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200">
-          <div className="relative w-full h-full flex items-center justify-center p-8">
+          <div className="relative w-full h-full flex items-center justify-center">
             {/* Exit Fullscreen Button */}
             <Button
               variant="outline"
               size="sm"
               onClick={toggleImagePreviewFullscreen}
-              className="absolute top-6 right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
+              className="absolute top-3 sm:top-6 right-3 sm:right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
             >
               <Minimize2 className="h-4 w-4" />
-              Exit Fullscreen
+              <span>Exit Fullscreen</span>
             </Button>
             
             {/* Header with filename */}
-            <div className="absolute top-6 left-6 flex items-center gap-3 text-white z-10">
+            <div className="absolute top-3 sm:top-6 left-3 sm:left-6 flex items-center gap-3 text-white z-10">
               <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                <Image className="h-5 w-5" />
+                <Image className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <h2 className="text-lg font-semibold">{creative.name}</h2>
+              <h2 className="text-sm sm:text-lg font-semibold truncate max-w-[200px] sm:max-w-none">{creative.name}</h2>
             </div>
 
             {/* Fullscreen Image */}
