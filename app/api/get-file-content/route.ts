@@ -1,109 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import { getFilePath } from '@/lib/fileStorage'
+import { NextResponse } from "next/server";
+import { getFilePath } from "@/lib/fileStorage";
+import { rewriteHtmlAssets } from "@/lib/assetRewriter";
 
-export async function GET(request: NextRequest) {
+export const dynamic = "force-dynamic";
+
+export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const fileId = searchParams.get('fileId')
-    const fileUrl = searchParams.get('fileUrl')
-    
-    console.log('API: Received request for fileId:', fileId, 'fileUrl:', fileUrl)
-    
-    if (!fileId && !fileUrl) {
-      return NextResponse.json(
-        { error: 'File ID or File URL is required' },
-        { status: 400 }
-      )
+    const { searchParams } = new URL(req.url);
+    const fileId = searchParams.get("fileId") || "";
+    const fileUrl = searchParams.get("fileUrl") || "";
+    const processAssets = (searchParams.get("processAssets") || "false") === "true";
+
+    if (!fileId) {
+      return NextResponse.json({ error: "fileId required" }, { status: 400 });
     }
 
-    // First, try to fetch from the provided file URL if available
-    if (fileUrl) {
-      try {
-        console.log('API: Fetching content from URL:', fileUrl)
-        
-        // Decode the URL in case it's encoded
-        const decodedUrl = decodeURIComponent(fileUrl)
-        console.log('API: Decoded URL:', decodedUrl)
-        
-        const response = await fetch(decodedUrl)
-        
-        if (response.ok) {
-          const content = await response.text()
-          console.log('API: Successfully fetched content, length:', content.length)
-          
-          return new NextResponse(content, {
-            status: 200,
-            headers: {
-              'Content-Type': 'text/html; charset=utf-8',
-              'Cache-Control': 'no-cache',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET',
-              'Access-Control-Allow-Headers': 'Content-Type',
-            },
-          })
-        } else {
-          console.log('API: Failed to fetch from URL, status:', response.status)
-        }
-      } catch (error) {
-        console.error('API: Error fetching from URL:', error)
-      }
+    const decoded = decodeURIComponent(fileUrl);
+    const inferredName = decoded.split("/").filter(Boolean).slice(-1)[0] || "index.html";
+
+    const absPath = await getFilePath(fileId, inferredName);
+    const html = await (await import("fs/promises")).readFile(absPath, "utf8");
+
+    if (!processAssets) {
+      return new NextResponse(html, {
+        status: 200,
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
     }
 
-    // Try to find the file using the file storage system
-    if (fileId) {
-      try {
-        // Parse the fileUrl to get the filename if available
-        let fileName = 'unknown.html'
-        if (fileUrl) {
-          const url = new URL(decodeURIComponent(fileUrl), 'http://localhost')
-          const nameParam = url.searchParams.get('name')
-          if (nameParam) {
-            fileName = nameParam
-          }
-        }
-        
-        console.log('API: Using file storage system with fileId:', fileId, 'fileName:', fileName)
-        
-        // Use the file storage system to get the file path
-        const filePath = await getFilePath(fileId, fileName)
-        console.log('API: File path from storage system:', filePath)
-        
-        if (fs.existsSync(filePath)) {
-          const content = fs.readFileSync(filePath, 'utf-8')
-          console.log('API: Successfully read file from storage, length:', content.length)
-          
-          return new NextResponse(content, {
-            status: 200,
-            headers: {
-              'Content-Type': 'text/html; charset=utf-8',
-              'Cache-Control': 'no-cache',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET',
-              'Access-Control-Allow-Headers': 'Content-Type',
-            },
-          })
-        } else {
-          console.log('API: File does not exist at path:', filePath)
-        }
-      } catch (error) {
-        console.error('API: Error using file storage system:', error)
-      }
-    }
+    const origin = process.env.NEXT_PUBLIC_BASE_PATH
+      ? new URL(process.env.NEXT_PUBLIC_BASE_PATH, req.url).toString().replace(/\/$/, "")
+      : new URL(req.url).origin;
 
-    // If no actual file found, return an error instead of sample content
-    console.log('API: No HTML file found, returning error')
+    const base = `${origin}/api/files/${encodeURIComponent(fileId)}/`;
+    const rewritten = rewriteHtmlAssets(html, base);
+
+    return new NextResponse(rewritten, {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  } catch (e) {
     return NextResponse.json(
-      { error: 'HTML file not found. Please ensure the file was uploaded correctly.' },
-      { status: 404 }
-    )
-
-  } catch (error) {
-    console.error('API: Error serving file content:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "failed to load content", detail: e instanceof Error ? e.message : String(e) },
       { status: 500 }
-    )
+    );
   }
 }

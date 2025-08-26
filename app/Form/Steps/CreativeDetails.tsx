@@ -61,7 +61,7 @@ interface ZipUploadResponse {
     fileUrl: string;
     fileSize: number;
     fileType?: string;
-    previewUrl?: string; // TODO: Backend will populate this for image files
+    previewUrl?: string; // Backend populates this for image files
   }>;
 }
 
@@ -253,7 +253,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
             name: mainFile.fileName,
             url: mainFile.fileUrl,
             size: mainFile.fileSize,
-            type: mainFile.fileType || 'text/html',
+            type: /\.html?$/i.test(mainFile.fileName)
+              ? 'html'
+              : /\.(png|jpe?g|gif|webp)$/i.test(mainFile.fileName)
+              ? 'image'
+              : 'other',
             source: 'single' as const,
             html: /\.html?$/i.test(mainFile.fileName),
             previewUrl: mainFile.previewUrl,
@@ -286,7 +290,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
         name: uploaded.fileName,
         url: uploaded.fileUrl,
         size: uploaded.fileSize,
-        type: uploaded.fileType || file.type || 'application/octet-stream',
+        type: /\.html?$/i.test(uploaded.fileName)
+          ? 'html'
+          : /\.(png|jpe?g|gif|webp)$/i.test(uploaded.fileName)
+          ? 'image'
+          : 'other',
         source: 'single' as const,
         html: /\.html?$/i.test(uploaded.fileName),
         previewUrl: previewUrl || (/\.(png|jpe?g|gif|webp)$/i.test(uploaded.fileName) ? uploaded.fileUrl : undefined)
@@ -326,11 +334,14 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           name: f.fileName,
           url: f.fileUrl,
           size: f.fileSize,
-          type: f.fileType || 'application/octet-stream',
+          type: /\.html?$/i.test(f.fileName)
+            ? 'html'
+            : /\.(png|jpe?g|gif|webp|svg)$/i.test(f.fileName)
+            ? 'image'
+            : 'other',
           source: 'zip' as const,
           html: /\.html?$/i.test(f.fileName),
-          // TODO: Once backend implements thumbnail generation, f.previewUrl will contain the thumbnail URL
-          // For now, fallback to original file URL for images (will show placeholder until backend is ready)
+          // Backend implements thumbnail generation, f.previewUrl contains the thumbnail URL
           previewUrl: f.previewUrl || (isImageFile ? f.fileUrl : undefined),
         };
       });

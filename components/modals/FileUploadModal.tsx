@@ -1,25 +1,35 @@
-"use client"
+"use client";
 
-import React from 'react'
-import { Button } from '@/components/ui/button'
-import { X, Upload, CheckCircle, AlertCircle, FolderOpen } from 'lucide-react'
-import { useFileUpload } from '@/hooks'
-import { FILE_UPLOAD_CONFIG, formatFileSize } from '@/constants'
+import React from "react";
+import { Button } from "@/components/ui/button";
+import {
+  X,
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  FolderOpen,
+  FileText,
+  Image,
+} from "lucide-react";
+import { useFileUpload } from "@/hooks";
+import { FILE_UPLOAD_CONFIG, formatFileSize } from "@/constants";
+import { UploadAnalysis, AnalyzedItem } from "@/types/upload";
 
-export type UploadType = 'single' | 'multiple'
+export type UploadType = "single" | "multiple";
 
-type UploadProvider = 'local' | 'vercel-blob' | 's3';
+type UploadProvider = "local" | "vercel-blob" | "s3";
 type ChunkingConfig = { enabled: boolean; chunkSize: number }; // bytes
 
 interface FileUploadModalProps {
-  isOpen: boolean
-  onClose: () => void
-  uploadType: UploadType
-  onFileUpload: (file: File) => void
+  isOpen: boolean;
+  onClose: () => void;
+  uploadType: UploadType;
+  onFileUpload: (file: File) => void;
+  onZipAnalyzed?: (analysis: UploadAnalysis, file: File) => void;
 
-  uploadEndpoint?: string;                 
-  uploadZipEndpoint?: string;              
-  authHeaders?: Record<string, string>;    
+  uploadEndpoint?: string;
+  uploadZipEndpoint?: string;
+  authHeaders?: Record<string, string>;
   userContext?: { userId?: string; role?: string };
 
   onUploadProgress?: (pct: number) => void;
@@ -32,7 +42,7 @@ interface FileUploadModalProps {
   provider?: UploadProvider;
   compressImages?: boolean;
   metadata?: Record<string, string | number | boolean>;
-  enableVirusScan?: boolean;         
+  enableVirusScan?: boolean;
   onPreviewGenerated?: (url: string) => void;
 }
 
@@ -40,87 +50,127 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
   isOpen,
   onClose,
   uploadType,
-  onFileUpload
+  onFileUpload,
+  onZipAnalyzed,
 }) => {
-  const config = uploadType === 'single' 
-    ? FILE_UPLOAD_CONFIG.SINGLE_CREATIVE 
-    : FILE_UPLOAD_CONFIG.MULTIPLE_CREATIVES
+  const config =
+    uploadType === "single"
+      ? FILE_UPLOAD_CONFIG.SINGLE_CREATIVE
+      : FILE_UPLOAD_CONFIG.MULTIPLE_CREATIVES;
+
+  const [zipAnalysis, setZipAnalysis] = React.useState<UploadAnalysis | null>(
+    null
+  );
+  const [isAnalyzing, setIsAnalyzing] = React.useState(false);
 
   const { state, handlers, startUpload } = useFileUpload(
     config.ALLOWED_TYPES,
     config.MAX_SIZE_MB,
     async (file: File) => {
-      await onFileUpload(file)
-      // Reset state and close modal only after onFileUpload completes
-      handlers.resetState()
-      onClose()
-    }
-  )
+      if (file.name.toLowerCase().endsWith(".zip") && onZipAnalyzed) {
+        setIsAnalyzing(true);
+        try {
+          const analysis = await analyzeZipFile(file);
+          setZipAnalysis(analysis);
+          onZipAnalyzed(analysis, file);
+          return;
+        } catch (error) {
+          console.error("ZIP analysis failed:", error);
+        } finally {
+          setIsAnalyzing(false);
+        }
+      }
 
-  // Prevent background scrolling when modal is open
+      await onFileUpload(file);
+      handlers.resetState();
+      onClose();
+    }
+  );
+
+  const analyzeZipFile = async (file: File): Promise<UploadAnalysis> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch("/api/analyze-zip", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("ZIP analysis failed");
+    }
+
+    return response.json();
+  };
+
   React.useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = 'unset'
+      document.body.style.overflow = "unset";
     }
 
-    // Cleanup function to restore scrolling when component unmounts
     return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [isOpen])
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen]);
 
-  // Reset modal state when opening (separate effect to avoid setState loops)
   React.useEffect(() => {
     if (isOpen) {
-      // Use setTimeout to avoid setState during render cycle
       const timer = setTimeout(() => {
-        handlers.resetState()
-      }, 0)
-      return () => clearTimeout(timer)
+        handlers.resetState();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [isOpen, handlers])
+  }, [isOpen, handlers]);
 
   const handleClose = () => {
-    handlers.resetState()
-    onClose()
-  }
+    handlers.resetState();
+    onClose();
+  };
 
   const getModalTitle = () => {
-    return uploadType === 'single' ? 'Upload Single Creative' : 'Upload Multiple Creatives'
-  }
+    return uploadType === "single"
+      ? "Upload Single Creative"
+      : "Upload Multiple Creatives";
+  };
 
   const getDragDropContent = () => {
-    if (state.uploadStatus === 'success') {
+    if (state.uploadStatus === "success") {
       return (
         <div className="space-y-3">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
           <div>
-            <p className="text-sm font-medium text-green-900">Upload Successful!</p>
+            <p className="text-sm font-medium text-green-900">
+              Upload Successful!
+            </p>
             <p className="text-xs text-green-600">File uploaded successfully</p>
           </div>
         </div>
-      )
+      );
     }
-    
+
     if (state.selectedFile) {
       return (
         <div className="space-y-3">
           <CheckCircle className="h-12 w-12 text-blue-500 mx-auto" />
           <div>
-            <p className="text-sm font-medium text-gray-900">{state.selectedFile.name}</p>
+            <p className="text-sm font-medium text-gray-900">
+              {state.selectedFile.name}
+            </p>
             <p className="text-xs text-gray-500">
               {formatFileSize(state.selectedFile.size)}
             </p>
-            {uploadType === 'multiple' && (
-              <p className="text-xs text-blue-600 font-medium">ZIP file ready for upload</p>
+            {uploadType === "multiple" && (
+              <p className="text-xs text-blue-600 font-medium">
+                ZIP file ready for upload
+              </p>
             )}
           </div>
         </div>
-      )
+      );
     }
-    
+
     return (
       <div className="space-y-3">
         <Upload className={`h-12 w-12 text-gray-400 mx-auto`} />
@@ -128,16 +178,14 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
           <p className="text-sm font-medium text-gray-900">
             {config.PLACEHOLDER}
           </p>
-          <p className="text-xs text-gray-500">
-            or click to browse
-          </p>
+          <p className="text-xs text-gray-500">or click to browse</p>
         </div>
       </div>
-    )
-  }
+    );
+  };
 
   const getInfoBox = () => {
-    if (uploadType === 'multiple') {
+    if (uploadType === "multiple") {
       return (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex items-start gap-2">
@@ -152,14 +200,14 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
             </div>
           </div>
         </div>
-      )
+      );
     }
-    return null
-  }
+    return null;
+  };
 
   const getFileInfo = () => {
-    if (!state.selectedFile) return null
-    
+    if (!state.selectedFile) return null;
+
     return (
       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
         <div className="flex items-center gap-2">
@@ -174,17 +222,19 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
           </div>
         </div>
       </div>
-    )
-  }
+    );
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-color-border">
-          <h2 className="text-xl font-semibold text-gray-900">{getModalTitle()}</h2>
+          <h2 className="text-xl font-semibold text-gray-900">
+            {getModalTitle()}
+          </h2>
           <Button
             variant="ghost"
             size="sm"
@@ -203,13 +253,13 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
           {/* Drag & Drop Area */}
           <div
             className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              state.uploadStatus === 'success'
-                ? 'border-green-400 bg-green-50'
-                : state.dragActive 
-                  ? 'border-blue-400 bg-blue-50' 
-                  : state.selectedFile 
-                    ? 'border-blue-400 bg-blue-50' 
-                    : 'border-gray-300 bg-gray-50'
+              state.uploadStatus === "success"
+                ? "border-green-400 bg-green-50"
+                : state.dragActive
+                ? "border-blue-400 bg-blue-50"
+                : state.selectedFile
+                ? "border-blue-400 bg-blue-50"
+                : "border-gray-300 bg-gray-50"
             }`}
             onDragEnter={handlers.handleDrag}
             onDragLeave={handlers.handleDrag}
@@ -219,8 +269,78 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
             {getDragDropContent()}
           </div>
 
+          {/* Analyzing ZIP state */}
+          {isAnalyzing && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-center gap-2 text-blue-700">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-200 border-t-blue-600"></div>
+              <span className="text-sm">Analyzing ZIP file...</span>
+            </div>
+          )}
+
+          {/* ZIP Analysis Results */}
+          {zipAnalysis && (
+            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-md">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <h3 className="text-sm font-medium text-green-900">
+                  ZIP Analysis Complete
+                </h3>
+              </div>
+
+              <div className="space-y-2 text-sm text-green-800">
+                <p>
+                  <strong>Mode:</strong>{" "}
+                  {zipAnalysis.isSingleCreative
+                    ? "Single Creative"
+                    : "Multiple Creatives"}
+                </p>
+                <p>
+                  <strong>Files:</strong> {zipAnalysis.counts.total} total
+                </p>
+                <p>
+                  <strong>HTML:</strong> {zipAnalysis.counts.htmls}
+                </p>
+                <p>
+                  <strong>Images:</strong> {zipAnalysis.counts.images}
+                </p>
+                <p>
+                  <strong>Others:</strong> {zipAnalysis.counts.others}
+                </p>
+              </div>
+
+              {/* Preview of analyzed items */}
+              <div className="mt-3 space-y-2">
+                {zipAnalysis.items.slice(0, 5).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 p-2 bg-white rounded border"
+                  >
+                    {item.type === "html" ? (
+                      <FileText className="h-4 w-4 text-blue-500" />
+                    ) : item.type === "image" ? (
+                      <Image className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <div className="h-4 w-4 bg-gray-300 rounded" />
+                    )}
+                    <span className="text-xs text-gray-700 truncate flex-1">
+                      {item.name}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {formatFileSize(item.size)}
+                    </span>
+                  </div>
+                ))}
+                {zipAnalysis.items.length > 5 && (
+                  <p className="text-xs text-gray-500 text-center">
+                    +{zipAnalysis.items.length - 5} more files
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Uploading state */}
-          {state.uploadStatus === 'uploading' && (
+          {state.uploadStatus === "uploading" && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md flex items-center justify-center gap-2 text-blue-700">
               <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-200 border-t-blue-600"></div>
               <span className="text-sm">Uploading…</span>
@@ -241,10 +361,10 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
             <div className="mt-4 text-center">
               <Button
                 variant="outline"
-                onClick={() => document.getElementById('file-upload')?.click()}
+                onClick={() => document.getElementById("file-upload")?.click()}
                 className="w-full"
               >
-                Browse {uploadType === 'single' ? 'Files' : 'ZIP Files'}
+                Browse {uploadType === "single" ? "Files" : "ZIP Files"}
               </Button>
             </div>
           )}
@@ -261,10 +381,22 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
 
           {/* File Info */}
           {getFileInfo()}
+
+          {/* Close button when ZIP analysis is complete */}
+          {zipAnalysis && (
+            <div className="mt-4 text-center">
+              <Button
+                onClick={handleClose}
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
+                Close
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default FileUploadModal
+export default FileUploadModal;

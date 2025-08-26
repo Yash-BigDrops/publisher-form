@@ -3,6 +3,7 @@ import { detectFileType } from '@/lib/security/fileType';
 import { scanBufferWithClamAV } from '@/lib/security/clamav';
 import { sha256 } from '@/lib/security/checksums';
 import { saveBuffer } from '@/lib/fileStorage';
+import { makeImagePreview } from '@/lib/preview';
 
 export type ZipProcessOptions = {
   allow: Set<string>;
@@ -31,6 +32,7 @@ export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, 
     fileType: string;
     hash: string;
     depth: number;
+    previewUrl?: string;
   }> = [];
   const skipped: Array<{
     path?: string;
@@ -89,6 +91,16 @@ export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, 
 
     const baseName = path.split('/').pop() || 'file';
     const { id, fileName } = await saveBuffer(buf, baseName);
+
+    let previewUrl: string | undefined;
+    if (mime.startsWith('image/') && mime !== 'image/svg+xml') {
+      const thumb = await makeImagePreview(buf, 400);
+      if (thumb) {
+        const prev = await saveBuffer(thumb, `preview_${fileName}.jpg`);
+        previewUrl = `/api/files/${prev.id}/${prev.fileName}`;
+      }
+    }
+
     extracted.push({
       fileId: id,
       fileName,
@@ -96,7 +108,8 @@ export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, 
       fileSize: buf.length,
       fileType: mime,
       hash,
-      depth
+      depth,
+      previewUrl
     });
   }
 

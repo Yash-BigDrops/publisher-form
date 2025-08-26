@@ -1,87 +1,31 @@
-"use client"
+"use client";
 
-import React, { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { FileText, Image, File, Minimize2, FileArchive } from 'lucide-react'
-import { formatFileSize, getFileType } from '@/constants'
-import SingleCreativeView from './SingleCreativeView'
-
-// Image Preview Component with error handling
-const ImagePreview: React.FC<{ src: string; alt: string; fileName: string }> = ({ src, alt, fileName }) => {
-  const [imageError, setImageError] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  React.useEffect(() => {
-    // Reset states when src changes
-    setImageError(false)
-    setIsLoading(true)
-    console.log(`Loading image: ${src} for file: ${fileName}`)
-  }, [src, fileName])
-
-  return (
-    <div className="w-full h-full relative bg-gray-100">
-      {!imageError && (
-        <img
-          src={src}
-          alt={alt}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
-          onError={(e) => {
-            console.error(`Failed to load image: ${src} for file: ${fileName}`, e)
-            setImageError(true)
-            setIsLoading(false)
-          }}
-          onLoad={() => {
-            console.log(`Successfully loaded image: ${src} for file: ${fileName}`)
-            setIsLoading(false)
-          }}
-          crossOrigin="anonymous"
-        />
-      )}
-      
-      {/* Loading state */}
-      {isLoading && !imageError && (
-        <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-          <div className="text-center">
-            <div className="animate-pulse">
-              <Image className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-              <p className="text-xs font-medium text-gray-500">Loading...</p>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Error fallback */}
-      {imageError && (
-        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
-          <div className="text-center">
-            <Image className="h-10 w-10 text-blue-500 mx-auto mb-2" />
-            <p className="text-xs font-medium text-blue-600">Image</p>
-            <p className="text-xs text-blue-500 mt-1">{fileName.split('.').pop()?.toUpperCase()}</p>
-            <p className="text-xs text-gray-400 mt-1">Failed to load</p>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { FileText, Image, File, Minimize2, FileArchive } from "lucide-react";
+import { formatFileSize, getFileType } from "@/constants";
+import SingleCreativeView from "./SingleCreativeView";
+import { renameCreative } from "@/lib/creativeClient";
+import { ImagePreview } from "@/components/ui/ImagePreview";
+import { bulkDeleteByIds, parseIdsFromUrl } from "@/lib/filesClient";
 
 interface MultipleCreativeViewProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen: boolean;
+  onClose: () => void;
   creatives: Array<{
-    id: string
-    name: string
-    url: string
-    size: number
-    type: string
-    previewUrl?: string
-    html?: boolean
-  }>
-  zipFileName?: string
-  onRemoveCreative?: (creativeId: string) => void
-  onFileNameChange?: (fileId: string, newFileName: string) => void
+    id: string;
+    name: string;
+    url: string;
+    size: number;
+    type: string;
+    previewUrl?: string;
+    html?: boolean;
+  }>;
+  zipFileName?: string;
+  onRemoveCreative?: (creativeId: string) => void;
+  onFileNameChange?: (fileId: string, newFileName: string) => void;
 }
 
 const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
@@ -90,106 +34,125 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
   creatives,
   zipFileName,
   onRemoveCreative,
-  onFileNameChange
+  onFileNameChange,
 }) => {
-  const [currentCreativeIndex, setCurrentCreativeIndex] = useState(0)
-  const [isHtmlEditorFullscreen, setIsHtmlEditorFullscreen] = useState(false)
-  const [isImagePreviewFullscreen, setIsImagePreviewFullscreen] = useState(false)
-  
+  const [currentCreativeIndex, setCurrentCreativeIndex] = useState(0);
+  const [isHtmlEditorFullscreen, setIsHtmlEditorFullscreen] = useState(false);
+  const [isImagePreviewFullscreen, setIsImagePreviewFullscreen] =
+    useState(false);
+
   // SingleCreativeView state
-  const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] = useState(false)
-  const [selectedCreative, setSelectedCreative] = useState<MultipleCreativeViewProps['creatives'][0] | null>(null)
-  
+  const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] =
+    useState(false);
+  const [selectedCreative, setSelectedCreative] = useState<
+    MultipleCreativeViewProps["creatives"][0] | null
+  >(null);
+
   // HTML content state for editing
-  const [htmlContent, setHtmlContent] = useState('')
+  const [htmlContent, setHtmlContent] = useState("");
+
+  // CRUD operations state
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>("");
 
   // Current creative
-  const currentCreative = creatives[currentCreativeIndex]
+  const currentCreative = creatives[currentCreativeIndex];
 
   // Prevent background scrolling when modal is open
   React.useEffect(() => {
     if (isOpen) {
       // Store current scroll position
-      const scrollY = window.scrollY
-      document.body.style.position = 'fixed'
-      document.body.style.top = `-${scrollY}px`
-      document.body.style.width = '100%'
-      document.body.style.overflow = 'hidden'
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+      document.body.style.overflow = "hidden";
     } else {
       // Restore scroll position and body styles
-      const scrollY = document.body.style.top
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.width = ''
-      document.body.style.overflow = ''
+      const scrollY = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
       if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || '0') * -1)
+        window.scrollTo(0, parseInt(scrollY || "0") * -1);
       }
     }
 
     // Cleanup function to restore scrolling when component unmounts
     return () => {
-      const scrollY = document.body.style.top
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.width = ''
-      document.body.style.overflow = ''
+      const scrollY = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
       if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || '0') * -1)
+        window.scrollTo(0, parseInt(scrollY || "0") * -1);
       }
-    }
-  }, [isOpen])
+    };
+  }, [isOpen]);
 
   // Load HTML content when creative changes for HTML creatives
   React.useEffect(() => {
-    if (isOpen && currentCreative && (currentCreative.type?.includes('html') || currentCreative.name.toLowerCase().includes('.html'))) {
-      console.log('Loading HTML content for HTML creative...')
-      fetchHtmlContent()
+    if (
+      isOpen &&
+      currentCreative &&
+      (currentCreative.type?.includes("html") ||
+        currentCreative.name.toLowerCase().includes(".html"))
+    ) {
+      console.log("Loading HTML content for HTML creative...");
+      fetchHtmlContent();
     }
-  }, [isOpen, currentCreative]) // fetchHtmlContent is defined inline and doesn't need to be a dependency
+  }, [isOpen, currentCreative]); // fetchHtmlContent is defined inline and doesn't need to be a dependency
 
   // Function to fetch HTML content from uploaded file
   const fetchHtmlContent = async () => {
-    if (!currentCreative) return
-    
+    if (!currentCreative) return;
+
     try {
-      console.log('Fetching HTML content from:', currentCreative.url)
-      
+      console.log("Fetching HTML content from:", currentCreative.url);
+
       // First, try to get the file content from our API endpoint
-      const encodedFileUrl = encodeURIComponent(currentCreative.url)
-      const apiResponse = await fetch(`/api/get-file-content?fileId=${currentCreative.id}&fileUrl=${encodedFileUrl}&processAssets=true`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      })
-      
+      const encodedFileUrl = encodeURIComponent(currentCreative.url);
+      const apiResponse = await fetch(
+        `/api/get-file-content?fileId=${currentCreative.id}&fileUrl=${encodedFileUrl}&processAssets=true`,
+        {
+          method: "GET",
+          headers: {
+            Accept:
+              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          },
+        }
+      );
+
       if (apiResponse.ok) {
-        const htmlText = await apiResponse.text()
-        console.log('HTML content loaded via API, length:', htmlText.length)
-        setHtmlContent(htmlText)
-        return
+        const htmlText = await apiResponse.text();
+        console.log("HTML content loaded via API, length:", htmlText.length);
+        setHtmlContent(htmlText);
+        return;
       } else {
-        console.log('API response not OK, status:', apiResponse.status)
+        console.log("API response not OK, status:", apiResponse.status);
       }
-      
+
       // If API fails, try to fetch directly from the uploaded URL
-      console.log('API failed, trying direct URL fetch...')
+      console.log("API failed, trying direct URL fetch...");
       const directResponse = await fetch(currentCreative.url, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        mode: 'cors',
-      })
-      
+        mode: "cors",
+      });
+
       if (directResponse.ok) {
-        const htmlText = await directResponse.text()
-        console.log('HTML content loaded directly, length:', htmlText.length)
-        setHtmlContent(htmlText)
+        const htmlText = await directResponse.text();
+        console.log("HTML content loaded directly, length:", htmlText.length);
+        setHtmlContent(htmlText);
       } else {
         // Final fallback
-        console.log('All methods failed, using fallback content')
+        console.log("All methods failed, using fallback content");
         setHtmlContent(`<!-- HTML Content Loading Failed -->
 <!DOCTYPE html>
 <html lang="en">
@@ -219,11 +182,11 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         <p>You can start editing by replacing this content with your HTML code.</p>
     </div>
 </body>
-</html>`)
+</html>`);
       }
     } catch (error) {
-      console.log('Fetch error, using fallback content...')
-      console.error('Error details:', error)
+      console.log("Fetch error, using fallback content...");
+      console.error("Error details:", error);
       setHtmlContent(`<!-- HTML Content Loading Failed -->
 <!DOCTYPE html>
 <html>
@@ -233,51 +196,125 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         <p>Please try refreshing or contact support.</p>
     </div>
 </body>
-</html>`)
+</html>`);
     }
-  }
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   const handleSaveHtml = async () => {
-    console.log('Saving HTML changes for creative:', currentCreative?.id)
-  }
+    console.log("Saving HTML changes for creative:", currentCreative?.id);
+  };
 
   // HTML Editor fullscreen toggle
   const toggleHtmlEditorFullscreen = () => {
-    setIsHtmlEditorFullscreen(!isHtmlEditorFullscreen)
-  }
+    setIsHtmlEditorFullscreen(!isHtmlEditorFullscreen);
+  };
 
   // Image Preview fullscreen toggle
   const toggleImagePreviewFullscreen = () => {
-    setIsImagePreviewFullscreen(!isImagePreviewFullscreen)
-  }
+    setIsImagePreviewFullscreen(!isImagePreviewFullscreen);
+  };
 
   // SingleCreativeView handlers
-  const openSingleCreativeView = (creative: MultipleCreativeViewProps['creatives'][0]) => {
-    setSelectedCreative(creative)
-    setIsSingleCreativeViewOpen(true)
-  }
+  const openSingleCreativeView = (
+    creative: MultipleCreativeViewProps["creatives"][0]
+  ) => {
+    setSelectedCreative(creative);
+    setIsSingleCreativeViewOpen(true);
+  };
 
   const closeSingleCreativeView = () => {
-    setIsSingleCreativeViewOpen(false)
-    setSelectedCreative(null)
-  }
+    setIsSingleCreativeViewOpen(false);
+    setSelectedCreative(null);
+  };
 
-  const handleFileNameChangeFromSingle = (fileId: string, newFileName: string) => {
+  const handleFileNameChangeFromSingle = (
+    fileId: string,
+    newFileName: string
+  ) => {
     // Update the creative in the creatives array
-    const updatedCreatives = creatives.map(creative => 
+    const updatedCreatives = creatives.map((creative) =>
       creative.id === fileId ? { ...creative, name: newFileName } : creative
-    )
-    
+    );
+
     // Update selected creative if it's the one being edited
     if (selectedCreative?.id === fileId) {
-      setSelectedCreative({ ...selectedCreative, name: newFileName })
+      setSelectedCreative({ ...selectedCreative, name: newFileName });
     }
-    
+
     // Propagate the change to parent component
-    onFileNameChange?.(fileId, newFileName)
-  }
+    onFileNameChange?.(fileId, newFileName);
+  };
+
+  // CRUD operations
+  const handleDeleteCreative = async (creative: (typeof creatives)[0]) => {
+    if (!confirm(`Are you sure you want to delete "${creative.name}"?`)) {
+      return;
+    }
+
+    try {
+      setIsDeleting(creative.id);
+
+      const ids = new Set<string>();
+      ids.add(creative.id);
+
+      if (creative.previewUrl) {
+        const previewId = parseIdsFromUrl(creative.previewUrl).id;
+        if (previewId) ids.add(previewId);
+      }
+
+      await bulkDeleteByIds(Array.from(ids));
+
+      onRemoveCreative?.(creative.id);
+
+      if (currentCreative?.id === creative.id && creatives.length > 1) {
+        const currentIndex = creatives.findIndex((c) => c.id === creative.id);
+        const nextIndex =
+          currentIndex === creatives.length - 1
+            ? currentIndex - 1
+            : currentIndex + 1;
+        setCurrentCreativeIndex(nextIndex);
+      }
+    } catch (error) {
+      console.error("Failed to delete creative:", error);
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
+  const handleRenameCreative = async (
+    creative: (typeof creatives)[0],
+    newName: string
+  ) => {
+    if (!newName.trim() || newName === creative.name) {
+      setIsRenaming(null);
+      setEditingName("");
+      return;
+    }
+
+    try {
+      setIsRenaming(creative.id);
+      await renameCreative({
+        creativeId: creative.id,
+        fileUrl: creative.url,
+        newName: newName.trim(),
+      });
+
+      // Update local state
+      onFileNameChange?.(creative.id, newName.trim());
+
+      // Update selected creative if it's the one being renamed
+      if (selectedCreative?.id === creative.id) {
+        setSelectedCreative({ ...selectedCreative, name: newName.trim() });
+      }
+    } catch (error) {
+      console.error("Failed to rename creative:", error);
+    } finally {
+      setIsRenaming(null);
+      setEditingName("");
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
@@ -290,7 +327,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900 mb-0.5 sm:mb-1 truncate">
-                {zipFileName || 'Multiple Creatives'}
+                {zipFileName || "Multiple Creatives"}
               </h2>
               <div className="flex items-center gap-1 sm:gap-2">
                 <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
@@ -301,7 +338,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
               </div>
             </div>
           </div>
-          
+
           <Button
             variant="default"
             size="sm"
@@ -317,95 +354,170 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
           <div className="h-full p-3 sm:p-4 lg:p-6 bg-gray-50 overflow-y-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
               {creatives.map((creative) => {
-                const fileType = getFileType(creative.name)
-                const isImage = fileType === 'image'
-                const isHtml = fileType === 'html'
-                
-                // Debug logging for image URLs
-                if (isImage) {
-                  console.log(`Image creative ${creative.name}:`, {
-                    previewUrl: creative.previewUrl,
-                    url: creative.url,
-                    finalSrc: creative.previewUrl || creative.url
-                  })
-                }
-                
+                const fileType = getFileType(creative.name);
+                const isImage = fileType === "image";
+                const isHtml = fileType === "html";
+
                 return (
-                  <div key={creative.id} className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 overflow-hidden group">
+                  <div
+                    key={creative.id}
+                    className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-200 overflow-hidden group"
+                  >
                     {/* Preview Section */}
                     <div className="aspect-[4/3] bg-gray-50 overflow-hidden relative">
                       {isImage ? (
-                        <ImagePreview 
+                        <ImagePreview
                           src={creative.previewUrl || creative.url}
                           alt={creative.name}
                           fileName={creative.name}
+                          className="w-full h-full object-cover"
                         />
                       ) : isHtml ? (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-50">
                           <div className="text-center">
                             <FileText className="h-10 w-10 text-emerald-600 mx-auto mb-2" />
-                            <p className="text-xs font-medium text-emerald-700">HTML</p>
+                            <p className="text-xs font-medium text-emerald-700">
+                              HTML
+                            </p>
                           </div>
                         </div>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-50">
                           <div className="text-center">
                             <File className="h-10 w-10 text-slate-500 mx-auto mb-2" />
-                            <p className="text-xs font-medium text-slate-600">File</p>
+                            <p className="text-xs font-medium text-slate-600">
+                              File
+                            </p>
                           </div>
                         </div>
                       )}
 
-                      {/* Remove Button - Top Right */}
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      {/* Action Buttons - Top Right */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                        {/* Rename Button */}
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={(e) => {
-                            e.stopPropagation()
-                            if (onRemoveCreative) {
-                              onRemoveCreative(creative.id)
-                            }
+                            e.stopPropagation();
+                            setEditingName(creative.name);
+                            setIsRenaming(creative.id);
                           }}
+                          disabled={isRenaming === creative.id}
+                          className="h-6 sm:h-7 px-1.5 sm:px-2 bg-white/95 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 text-xs font-medium shadow-sm"
+                        >
+                          <span className="hidden sm:inline">Rename</span>
+                          <span className="sm:hidden">✏️</span>
+                        </Button>
+
+                        {/* Delete Button */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteCreative(creative);
+                          }}
+                          disabled={isDeleting === creative.id}
                           className="h-6 sm:h-7 px-1.5 sm:px-2 bg-white/95 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 text-xs font-medium shadow-sm"
                         >
-                          <span className="hidden sm:inline">Remove</span>
-                          <span className="sm:hidden">×</span>
+                          {isDeleting === creative.id ? (
+                            <div className="w-3 h-3 border border-red-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <span className="hidden sm:inline">Delete</span>
+                              <span className="sm:hidden">×</span>
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
-                    
+
                     {/* Content Section */}
                     <div className="p-3 sm:p-4">
                       {/* Filename and File Info */}
                       <div className="mb-3">
-                        <h3 className="font-medium text-gray-900 text-xs sm:text-sm truncate mb-1" title={creative.name}>
-                          {creative.name}
-                        </h3>
+                        {isRenaming === creative.id ? (
+                          <div className="flex gap-1 mb-2">
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  handleRenameCreative(creative, editingName);
+                                } else if (e.key === "Escape") {
+                                  setIsRenaming(null);
+                                  setEditingName("");
+                                }
+                              }}
+                              className="flex-1 text-xs sm:text-sm border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handleRenameCreative(creative, editingName)
+                              }
+                              disabled={isRenaming === creative.id}
+                              className="h-6 sm:h-7 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                            >
+                              {isRenaming === creative.id ? (
+                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                "✓"
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setIsRenaming(null);
+                                setEditingName("");
+                              }}
+                              className="h-6 sm:h-7 px-2 border-gray-300 text-gray-600 hover:bg-gray-50 text-xs"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ) : (
+                          <h3
+                            className="font-medium text-gray-900 text-xs sm:text-sm truncate mb-1"
+                            title={creative.name}
+                          >
+                            {creative.name}
+                          </h3>
+                        )}
                         <div className="flex items-center justify-between text-xs text-gray-500">
-                          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full font-medium text-xs ${
-                            isImage ? 'bg-blue-50 text-blue-600' :
-                            isHtml ? 'bg-emerald-50 text-emerald-600' :
-                            'bg-gray-50 text-gray-600'
-                          }`}>
+                          <span
+                            className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full font-medium text-xs ${
+                              isImage
+                                ? "bg-blue-50 text-blue-600"
+                                : isHtml
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-gray-50 text-gray-600"
+                            }`}
+                          >
                             {fileType}
                           </span>
-                          <span className="font-medium text-xs">{formatFileSize(creative.size)}</span>
+                          <span className="font-medium text-xs">
+                            {formatFileSize(creative.size)}
+                          </span>
                         </div>
                       </div>
-                      
+
                       {/* View Button */}
                       <Button
                         onClick={() => {
-                          openSingleCreativeView(creative)
+                          openSingleCreativeView(creative);
                         }}
-                        className="w-full bg-blue-400 hover:bg-blue-600 text-white font-medium py-1.5 sm:py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm transition-colors duration-200"
+                        className="w-full bg-blue-400 hover:bg-blue-600 text-white font-medium py-1.5 sm:py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm transition-colors duration-200 mb-2"
                       >
                         <span>View Creative</span>
                       </Button>
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
           </div>
@@ -422,9 +534,11 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                 <div className="p-2 bg-orange-100 rounded-lg">
                   <FileText className="h-5 w-5 text-orange-600" />
                 </div>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">HTML Editor - {currentCreative?.name}</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-800 truncate">
+                  HTML Editor - {currentCreative?.name}
+                </h2>
               </div>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -459,7 +573,9 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                 <div className="flex-1 p-3 sm:p-4">
                   <Textarea
                     value={htmlContent}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setHtmlContent(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                      setHtmlContent(e.target.value)
+                    }
                     placeholder="Edit your HTML code here..."
                     className="w-full h-full resize-none text-xs sm:text-sm font-mono border-gray-300 focus:border-orange-500 focus:ring-orange-500/20"
                   />
@@ -475,7 +591,10 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                 </div>
                 <div className="flex-1 bg-gray-50 min-h-[300px] lg:min-h-0">
                   <iframe
-                    srcDoc={htmlContent || '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif;color:#666;"><p>HTML content will appear here</p></div>'}
+                    srcDoc={
+                      htmlContent ||
+                      '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:Arial,sans-serif;color:#666;"><p>HTML content will appear here</p></div>'
+                    }
                     title="HTML Preview - Fullscreen"
                     className="w-full h-full border-0"
                     sandbox="allow-scripts allow-same-origin"
@@ -488,44 +607,51 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
       )}
 
       {/* Fullscreen Image Preview Modal */}
-      {isImagePreviewFullscreen && currentCreative && getFileType(currentCreative.name) === 'image' && currentCreative.previewUrl && (
-        <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200">
-          <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8">
-            {/* Exit Fullscreen Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleImagePreviewFullscreen}
-              className="absolute top-3 sm:top-6 right-3 sm:right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
-            >
-              <Minimize2 className="h-4 w-4" />
-              <span>Exit Fullscreen</span>
-            </Button>
-            
-            {/* Header with filename */}
-            <div className="absolute top-3 sm:top-6 left-3 sm:left-6 flex items-center gap-3 text-white z-10">
-              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                <Image className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <h2 className="text-sm sm:text-lg font-semibold truncate max-w-[200px] sm:max-w-none">{currentCreative?.name}</h2>
-            </div>
+      {isImagePreviewFullscreen &&
+        currentCreative &&
+        getFileType(currentCreative.name) === "image" &&
+        (currentCreative.previewUrl || currentCreative.url) && (
+          <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+            <div className="relative w-full h-full flex items-center justify-center p-4 sm:p-8">
+              {/* Exit Fullscreen Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleImagePreviewFullscreen}
+                className="absolute top-3 sm:top-6 right-3 sm:right-6 flex items-center gap-2 text-white border-white/30 hover:bg-white/10 hover:text-white transition-colors z-10"
+              >
+                <Minimize2 className="h-4 w-4" />
+                <span>Exit Fullscreen</span>
+              </Button>
 
-            {/* Fullscreen Image */}
-            <img
-              src={currentCreative?.previewUrl}
-              alt={currentCreative?.name}
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            />
-            
-            {/* Click outside to close */}
-            <div 
-              className="absolute inset-0 cursor-pointer"
-              onClick={toggleImagePreviewFullscreen}
-            />
+              {/* Header with filename */}
+              <div className="absolute top-3 sm:top-6 left-3 sm:left-6 flex items-center gap-3 text-white z-10">
+                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                  <Image className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <h2 className="text-sm sm:text-lg font-semibold truncate max-w-[200px] sm:max-w-none">
+                  {currentCreative?.name}
+                </h2>
+              </div>
+
+              {/* Fullscreen Image */}
+              <div onClick={(e) => e.stopPropagation()}>
+                <ImagePreview
+                  src={currentCreative?.previewUrl || currentCreative?.url}
+                  alt={currentCreative?.name}
+                  fileName={currentCreative?.name}
+                  className="max-w-[90vw] max-h-[80vh] object-contain rounded-lg shadow-2xl"
+                />
+              </div>
+
+              {/* Click outside to close */}
+              <div
+                className="absolute inset-0 cursor-pointer"
+                onClick={toggleImagePreviewFullscreen}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* SingleCreativeView Modal */}
       {selectedCreative && (
@@ -537,7 +663,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         />
       )}
     </div>
-  )
-}
+  );
+};
 
-export default MultipleCreativeView
+export default MultipleCreativeView;

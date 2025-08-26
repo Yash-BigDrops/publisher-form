@@ -13,7 +13,7 @@ import { progressStart, progressUpdate, progressDone, progressError } from '@/li
 
 const ALLOW = new Set([
   'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
-  'text/html','application/pdf','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document' // docx
+  'text/html','application/pdf','application/zip','application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]);
 const PER_TIER_MAX: Record<string, number> = {
   free: 20 * 1024 * 1024,

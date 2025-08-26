@@ -1,29 +1,33 @@
-// lib/db.ts
-import { Pool } from 'pg';
+import { Pool } from "pg";
 
-let pool: Pool | null = null;
+declare global {
+  // allow global var in dev hot-reload
+  var __pgPool__: Pool | undefined;
+}
 
-export function getPool() {
-  if (!pool) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL env var is required');
-    }
-    
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    });
-  }
+export function getPool(): Pool {
+  const exists = globalThis.__pgPool__;
+  if (exists) return exists;
+
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL env var is required");
+
+  const pool = new Pool({
+    connectionString: url,
+    ssl: { rejectUnauthorized: false },
+    max: 3,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 5000,
+  });
+
+  globalThis.__pgPool__ = pool;
   return pool;
 }
 
-
 async function init() {
-  const dbPool = getPool();
-  await dbPool.query(`
+  const pool = getPool();
+  
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS telegram_users (
       id SERIAL PRIMARY KEY,
       username VARCHAR(255) UNIQUE NOT NULL,
@@ -33,7 +37,8 @@ async function init() {
       updated_at TIMESTAMP DEFAULT NOW()
     );
   `);
-  await dbPool.query(`
+  
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS creatives (
       id UUID PRIMARY KEY,
       affiliate_id TEXT,
@@ -51,7 +56,8 @@ async function init() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
-  await dbPool.query(`
+  
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS creative_files (
       id UUID PRIMARY KEY,
       creative_id UUID REFERENCES creatives(id) ON DELETE CASCADE,
@@ -62,12 +68,45 @@ async function init() {
     );
   `);
   
-  await dbPool.query(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS telegram_state (
       key TEXT PRIMARY KEY,
       value TEXT,
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS submissions (
+      id SERIAL PRIMARY KEY,
+      offer_id TEXT NOT NULL,
+      priority TEXT,
+      contact_method TEXT,
+      contact_info TEXT NOT NULL,
+      from_lines TEXT,
+      subject_lines TEXT,
+      other_request TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+  
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS submission_files (
+      id SERIAL PRIMARY KEY,
+      submission_id INTEGER REFERENCES submissions(id) ON DELETE CASCADE,
+      file_url TEXT,
+      file_key TEXT,
+      original_filename TEXT,
+      creative_from_lines TEXT,
+      creative_subject_lines TEXT,
+      creative_notes TEXT,
+      creative_html_code TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
 }
+
+init().catch((error) => {
+  console.error("Failed to initialize database tables:", error);
+});
 
