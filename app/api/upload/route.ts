@@ -18,10 +18,8 @@ export async function POST(req: NextRequest) {
 
   if ((file.type || '').includes('zip') || /\.zip$/i.test(file.name)) {
     const zipId = randomUUID();
-
     
     if (smartDetection) {
-      const zipId = randomUUID();
       const zip = await JSZip.loadAsync(buf);
 
       const normalize = (p: string) => p.replace(/\\/g, "/").replace(/\.\.(\/|\\)/g, "").replace(/^\/+/, "");
@@ -101,11 +99,15 @@ export async function POST(req: NextRequest) {
       const others = items.filter(i => i.type === "other").length;
       const isSingleCreative = (images + htmls) === 1;
 
+      // Return the analysis in the format expected by the frontend
       return NextResponse.json({
-        uploadId: zipId,
-        isSingleCreative,
-        items,
-        counts: { images, htmls, others, total: items.length },
+        success: true,
+        zipAnalysis: {
+          uploadId: zipId,
+          isSingleCreative,
+          items,
+          counts: { images, htmls, others, total: items.length },
+        }
       });
     }
     

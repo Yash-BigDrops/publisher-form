@@ -5,7 +5,7 @@ import { ProofreadResult } from "@/types/proofread";
 export const runtime = "nodejs";
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
+      apiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || "",
 });
 
 const MODEL = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20240620";
@@ -21,9 +21,9 @@ function safeParseJson<T>(s: string, fallback: T): T {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 });
-    }
+      if (!process.env.CLAUDE_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({ error: "CLAUDE_API_KEY or ANTHROPIC_API_KEY not configured" }, { status: 500 });
+  }
 
     const { text } = await req.json() as { text?: string };
     if (!text || typeof text !== "string") {

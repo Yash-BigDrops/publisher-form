@@ -38,19 +38,18 @@ interface SingleUploadResponse {
     uploadDate: string;
   }
   zipAnalysis?: {
+    uploadId: string
     isSingleCreative: boolean
-    mainCreative: {
-      fileId: string
-      fileName: string
-      fileUrl: string
-      fileSize: number
-      fileType: string
+    items: Array<{
+      id: string
+      name: string
+      type: "image" | "html" | "other"
+      size: number
+      url: string
       previewUrl?: string
-    }
-    assetCount: number
-    assetTypes: string[]
-    totalSize: number
-    structure: string
+      html?: boolean
+    }>
+    counts: { images: number; htmls: number; others: number; total: number }
   }
 }
 
@@ -247,22 +246,18 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       if (data.zipAnalysis) {
         if (data.zipAnalysis.isSingleCreative) {
           // Treat as single creative with assets
-          const mainFile = data.zipAnalysis.mainCreative;
+          const mainItem = data.zipAnalysis.items.find(i => i.type === "html" || i.type === "image") || data.zipAnalysis.items[0];
           const uploadedFile: UploadedFileMeta = {
-            id: mainFile.fileId,
-            name: mainFile.fileName,
-            url: mainFile.fileUrl,
-            size: mainFile.fileSize,
-            type: /\.html?$/i.test(mainFile.fileName)
-              ? 'html'
-              : /\.(png|jpe?g|gif|webp)$/i.test(mainFile.fileName)
-              ? 'image'
-              : 'other',
+            id: mainItem.id,
+            name: mainItem.name,
+            url: mainItem.url,
+            size: mainItem.size,
+            type: mainItem.type === "html" ? "html" : mainItem.type === "image" ? "image" : "other",
             source: 'single' as const,
-            html: /\.html?$/i.test(mainFile.fileName),
-            previewUrl: mainFile.previewUrl,
-            assetCount: data.zipAnalysis.assetCount,
-            hasAssets: data.zipAnalysis.assetCount > 0
+            html: mainItem.html,
+            previewUrl: mainItem.previewUrl,
+            assetCount: data.zipAnalysis.counts.total,
+            hasAssets: data.zipAnalysis.counts.total > 0
           };
 
           addFiles([uploadedFile]);

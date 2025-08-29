@@ -22,9 +22,10 @@ import {
 import { formatFileSize, getFileType } from "@/constants";
 import { Constants } from "@/app/Constants/Constants";
 import { proofreadCreative } from "@/lib/proofreadCreativeClient";
-import { saveHtml, renameCreative } from "@/lib/creativeClient";
+import { saveHtml, renameCreative, saveCreativeMetadata, getCreativeMetadata } from "@/lib/creativeClient";
 import { ImagePreview } from "@/components/ui/ImagePreview";
 import { generateEmailContent } from "@/lib/generationClient";
+import { ProofreadCreativeResponse } from "@/lib/proofreadCreativeClient";
 
 interface SingleCreativeViewProps {
   isOpen: boolean;
@@ -64,26 +65,8 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   
   // Proofreading data state
-  const [proofreadingData, setProofreadingData] = useState<{
-    issues: Array<{
-      icon: string;
-      type: string;
-      original?: string;
-      correction?: string;
-      note?: string;
-    }>;
-    suggestions: Array<{
-      icon: string;
-      type: string;
-      description: string;
-    }>;
-    qualityScore: {
-      grammar: number;
-      readability: number;
-      conversion: number;
-      brandAlignment: number;
-    };
-  }>({
+  const [proofreadingData, setProofreadingData] = useState<ProofreadCreativeResponse>({
+    success: true,
     issues: [],
     suggestions: [],
     qualityScore: {
@@ -103,6 +86,35 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
 
   // Content generation state
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+
+  // Load existing creative data when component mounts or creative changes
+  React.useEffect(() => {
+    if (isOpen && creative.id) {
+      loadExistingCreativeData();
+    }
+  }, [isOpen, creative.id]);
+
+  // Function to load existing creative data
+  const loadExistingCreativeData = async () => {
+    try {
+      const data = await getCreativeMetadata(creative.id);
+      if (data.success && data.metadata) {
+        setFromLines(data.metadata.fromLines || "");
+        setSubjectLines(data.metadata.subjectLines || "");
+        if (data.metadata.proofreadingData) {
+          setProofreadingData(data.metadata.proofreadingData);
+        }
+        if (data.metadata.htmlContent) {
+          setHtmlContent(data.metadata.htmlContent);
+        }
+        console.log("Loaded existing creative data for creative:", creative.id, data.metadata);
+      } else {
+        console.log("No existing data found for creative:", creative.id);
+      }
+    } catch (error) {
+      console.log("No existing data found for creative:", creative.id);
+    }
+  };
 
   // Prevent background scrolling when modal is open
   React.useEffect(() => {
@@ -400,8 +412,30 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
         return uniqueLines.join("\n");
       };
 
-      setFromLines((prev) => mergeContent(prev, newFromLines));
-      setSubjectLines((prev) => mergeContent(prev, newSubjectLines));
+      const mergedFromLines = mergeContent(fromLines, newFromLines);
+      const mergedSubjectLines = mergeContent(subjectLines, newSubjectLines);
+      
+      setFromLines(mergedFromLines);
+      setSubjectLines(mergedSubjectLines);
+
+      // Save the generated content immediately for this creative
+      try {
+        await saveCreativeMetadata({
+          creativeId: creative.id,
+          fromLines: mergedFromLines,
+          subjectLines: mergedSubjectLines,
+          proofreadingData,
+          htmlContent,
+          metadata: {
+            lastGenerated: new Date().toISOString(),
+            creativeType: creative.type,
+            fileName: creative.name,
+          },
+        });
+        console.log("Generated content saved immediately for creative:", creative.id);
+      } catch (saveError) {
+        console.error("Failed to save generated content:", saveError);
+      }
 
       console.log("Content generation completed successfully");
     } catch (error) {
@@ -438,6 +472,25 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
             | "push",
         });
         setProofreadingData(result);
+        
+        // Save proofreading results immediately for this creative
+        try {
+          await saveCreativeMetadata({
+            creativeId: creative.id,
+            fromLines,
+            subjectLines,
+            proofreadingData: result,
+            htmlContent,
+            metadata: {
+              lastProofread: new Date().toISOString(),
+              creativeType: creative.type,
+              fileName: creative.name,
+            },
+          });
+          console.log("Proofreading results saved immediately for creative:", creative.id);
+        } catch (saveError) {
+          console.error("Failed to save proofreading results:", saveError);
+        }
       } else if (isImg) {
         let imageUrl = creative.previewUrl || creative.url;
         if (!imageUrl) {
@@ -473,6 +526,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     } catch (error) {
       console.error("Proofreading failed:", error);
       setProofreadingData({
+        success: false,
         issues: [],
         suggestions: [
           {
@@ -510,6 +564,38 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       console.log("HTML saved successfully");
     } catch (error) {
       console.error("Failed to save HTML:", error);
+      // Show error feedback (you can add a toast notification here)
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Comprehensive Save Function
+  const handleSaveAll = async () => {
+    try {
+      setIsSaving(true);
+      console.log("Saving all creative data for:", creative.id);
+
+      // Save all metadata including proofreading, email content, etc.
+      await saveCreativeMetadata({
+        creativeId: creative.id,
+        fromLines,
+        subjectLines,
+        proofreadingData,
+        htmlContent,
+        metadata: {
+          lastSaved: new Date().toISOString(),
+          creativeType: creative.type,
+          fileName: creative.name,
+        },
+      });
+
+      console.log("All creative data saved successfully");
+      
+      // Close the modal after successful save
+      onClose();
+    } catch (error) {
+      console.error("Failed to save creative data:", error);
       // Show error feedback (you can add a toast notification here)
     } finally {
       setIsSaving(false);
@@ -640,10 +726,11 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
             <Button
               variant="default"
               size="sm"
-              onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-150 text-xs sm:text-sm"
+              onClick={handleSaveAll}
+              disabled={isSaving}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-150 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>Save and Continue</span>
+              <span>{isSaving ? "Saving..." : "Save and Continue"}</span>
             </Button>
           </div>
         </div>

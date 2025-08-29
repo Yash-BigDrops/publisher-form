@@ -41,7 +41,7 @@ const CreativeForm = () => {
     additionalNotes: '',
     fromLines: '',
     subjectLines: '',
-    priority: 'medium',
+    priority: 'Medium',
     
     // Files (will be populated by upload handlers)
     uploadedFiles: [] as Array<{

@@ -178,9 +178,9 @@ export const Constants = {
         }
     },
 
-    // Prority
+    // Priority
     priorityLevels: [
-        { name: "High", value: "high" },
-        { name: "Medium", value: "medium" },
+        { name: "High", value: "High" },
+        { name: "Medium", value: "Medium" },
     ]
 } 

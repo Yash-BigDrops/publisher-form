@@ -37,3 +37,29 @@ export async function renameCreative(arg: { creativeId?: string; fileUrl?: strin
   if (!r.ok) throw new Error("Rename failed");
   return r.json();
 }
+
+export async function saveCreativeMetadata(arg: {
+  creativeId: string;
+  fromLines?: string;
+  subjectLines?: string;
+  proofreadingData?: unknown;
+  htmlContent?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const r = await fetch("/api/creative/save-metadata", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(arg),
+  });
+  if (!r.ok) throw new Error("Save metadata failed");
+  return r.json();
+}
+
+export async function getCreativeMetadata(creativeId: string) {
+  const r = await fetch(`/api/creative/get-metadata?creativeId=${creativeId}`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) throw new Error("Get metadata failed");
+  return r.json();
+}

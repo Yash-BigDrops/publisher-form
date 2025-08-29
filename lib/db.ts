@@ -104,6 +104,20 @@ async function init() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS creative_metadata (
+      id SERIAL PRIMARY KEY,
+      creative_id TEXT NOT NULL,
+      from_lines TEXT,
+      subject_lines TEXT,
+      proofreading_data JSONB,
+      html_content TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
 }
 
 init().catch((error) => {

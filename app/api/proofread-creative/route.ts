@@ -23,9 +23,17 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const SYSTEM = `
-You are a precise creative proofreader and optimizer.
+You are a precise creative proofreader and optimizer specializing in email and marketing content.
 Return ONLY JSON with keys: issues (array), suggestions (array), qualityScore (object).
-Be concise, practical, and avoid generic advice.
+
+Focus on:
+- Grammar, spelling, and punctuation in the actual text content
+- Readability and clarity of the message
+- Conversion optimization (CTAs, compelling language, urgency)
+- Brand alignment and tone consistency
+
+Ignore HTML markup, focus only on the human-readable text content.
+Be concise, practical, and provide specific, actionable feedback.
 `;
 
 function isAbsolute(u: string) {
@@ -64,9 +72,12 @@ Context:
 - Campaign Goal: ${p.campaignGoal || "n/a"}
 - Brand Voice: ${p.brandVoice || "n/a"}
 
+You are analyzing the TEXT CONTENT of this creative, not the HTML structure.
+Focus on the actual words, sentences, and messaging that users will read.
+
 Output JSON shape:
 {
-  "issues": [{"icon": "⚠️","type":"Grammar Error","original":"...","correction":"..."}],
+  "issues": [{"icon": "⚠️","type":"Grammar Error","original":"...","correction":"...","note":"..."}],
   "suggestions": [{"icon":"💡","type":"Conversion Tip","description":"..."}],
   "qualityScore": {"grammar": 0-100,"readability":0-100,"conversion":0-100,"brandAlignment":0-100}
 }
@@ -74,7 +85,7 @@ Output JSON shape:
 }
 
 async function callAnthropicJSON(prompt: string) {
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
   const model = process.env.CLAUDE_MODEL || "claude-3-5-sonnet-20240620";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -164,7 +175,7 @@ function coerceResp(text: string | null): Resp | null {
 export async function POST(req: Request) {
   try {
     const hasOpenAI = !!process.env.OPENAI_API_KEY;
-    const hasClaude = !!process.env.ANTHROPIC_API_KEY;
+    const hasClaude = !!(process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY);
     
     console.log("Proofread environment check:", {
       hasOpenAI,
@@ -180,14 +191,25 @@ export async function POST(req: Request) {
 
     if (payload.fileType === "html") {
       const textOnly = (payload.htmlContent || "")
+        // Remove script and style tags completely
         .replace(/<script[\s\S]*?<\/script>/gi, "")
         .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<[^>]+>/g, " ")
+        // Remove HTML comments
+        .replace(/<!--[\s\S]*?-->/g, "")
+        // Replace common HTML tags with appropriate spacing to preserve sentence structure
+        .replace(/<\/?(?:p|div|h[1-6]|section|article|main|header|footer|nav|aside|ul|ol|li|table|tr|td|th|thead|tbody|caption|colgroup|col|blockquote|pre|address|fieldset|legend|form|label|input|textarea|select|option|button|img|a|span|strong|em|b|i|u|mark|small|del|ins|sub|sup|code|kbd|samp|var|cite|dfn|abbr|acronym|time|data|meter|progress|details|summary|dialog|menu|menuitem|wbr|br|hr)[^>]*>/gi, " ")
+        // Remove any remaining HTML tags
+        .replace(/<[^>]+>/g, "")
+        // Clean up whitespace while preserving sentence structure
         .replace(/\s+/g, " ")
+        .replace(/\s*([.!?])\s*/g, "$1 ")
+        .replace(/\s*([,;:])\s*/g, "$1 ")
         .trim()
         .slice(0, 15000); // safety
 
-      const prompt = `${ctx}\n\nHTML TEXT (truncated):\n${textOnly}\n\nReturn JSON.`;
+      console.log("Extracted text for proofreading:", textOnly.substring(0, 200) + "...");
+
+      const prompt = `${ctx}\n\nEXTRACTED TEXT CONTENT:\n${textOnly}\n\nAnalyze this text for grammar, readability, conversion optimization, and brand alignment. Focus on the actual content, not HTML markup. Return JSON only.`;
       out = coerceResp(await callAnthropicJSON(prompt)) || coerceResp(await callOpenAIJSON(prompt));
     } else if (payload.fileType === "image") {
       if (!payload.fileUrl) {
