@@ -38,6 +38,7 @@ interface SingleCreativeViewProps {
     type: string;
     previewUrl?: string;
     html?: boolean;
+    uploadId?: string; // Add uploadId for asset mapping
   };
   onFileNameChange?: (fileId: string, newFileName: string) => void;
 }
@@ -161,16 +162,20 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       // First, try to get the file content from our API endpoint with asset processing
       console.log("Trying API endpoint with asset processing...");
       const encodedFileUrl = encodeURIComponent(creative.url);
-      const apiResponse = await fetch(
-        `/api/get-file-content?fileId=${creative.id}&fileUrl=${encodedFileUrl}&processAssets=true`,
-        {
-          method: "GET",
+      
+      // Build the API URL with uploadId if available
+      let apiUrl = `/api/get-file-content?fileId=${creative.id}&fileUrl=${encodedFileUrl}&processAssets=true`;
+      if (creative.uploadId) {
+        apiUrl += `&uploadId=${encodeURIComponent(creative.uploadId)}`;
+      }
+      
+      const apiResponse = await fetch(apiUrl, {
+        method: "GET",
         headers: {
-            Accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        }
-      );
+      });
       
       if (apiResponse.ok) {
         const htmlText = await apiResponse.text();
@@ -213,7 +218,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       // Try alternative approach
       await tryAlternativeHtmlLoading();
     }
-  }, [creative.url, creative.type, creative.name, creative.id]);
+  }, [creative.url, creative.type, creative.name, creative.id, creative.uploadId]);
 
   // Alternative approach to load HTML content
   const tryAlternativeHtmlLoading = async () => {

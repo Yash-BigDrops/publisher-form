@@ -9,6 +9,7 @@ export interface UploadedFileMeta {
   previewUrl?: string;
   assetCount?: number;
   hasAssets?: boolean;
+  uploadId?: string; // Add uploadId to track ZIP uploads
 }
 
 export interface AnalyzedItem {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFilePath } from "@/lib/fileStorage";
-import { rewriteHtmlAssets } from "@/lib/assetRewriter";
+import { rewriteHtmlAssets, getAssetMapping } from "@/lib/assetRewriter";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ export async function GET(req: Request) {
     const fileId = searchParams.get("fileId") || "";
     const fileUrl = searchParams.get("fileUrl") || "";
     const processAssets = (searchParams.get("processAssets") || "false") === "true";
+    const uploadId = searchParams.get("uploadId") || ""; // Add uploadId parameter
 
     if (!fileId) {
       return NextResponse.json({ error: "fileId required" }, { status: 400 });
@@ -33,7 +34,14 @@ export async function GET(req: Request) {
       : new URL(req.url).origin;
 
     const base = `${origin}/api/files/${encodeURIComponent(fileId)}/`;
-    const rewritten = rewriteHtmlAssets(html, base);
+
+    // Try to get asset mapping if uploadId is provided
+    let assetMapping = undefined;
+    if (uploadId) {
+      assetMapping = getAssetMapping(uploadId);
+    }
+
+    const rewritten = rewriteHtmlAssets(html, base, assetMapping);
 
     return new NextResponse(rewritten, {
       status: 200,

@@ -22,6 +22,7 @@ interface MultipleCreativeViewProps {
     type: string;
     previewUrl?: string;
     html?: boolean;
+    uploadId?: string; // Add uploadId for asset mapping
   }>;
   zipFileName?: string;
   onRemoveCreative?: (creativeId: string) => void;
@@ -115,16 +116,20 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
 
       // First, try to get the file content from our API endpoint
       const encodedFileUrl = encodeURIComponent(currentCreative.url);
-      const apiResponse = await fetch(
-        `/api/get-file-content?fileId=${currentCreative.id}&fileUrl=${encodedFileUrl}&processAssets=true`,
-        {
-          method: "GET",
-          headers: {
-            Accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          },
-        }
-      );
+      
+      // Build the API URL with uploadId if available
+      let apiUrl = `/api/get-file-content?fileId=${currentCreative.id}&fileUrl=${encodedFileUrl}&processAssets=true`;
+      if (currentCreative.uploadId) {
+        apiUrl += `&uploadId=${encodeURIComponent(currentCreative.uploadId)}`;
+      }
+      
+      const apiResponse = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      });
 
       if (apiResponse.ok) {
         const htmlText = await apiResponse.text();

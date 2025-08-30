@@ -22,6 +22,7 @@ type UploadedFileMeta = {
   previewUrl?: string;
   assetCount?: number;
   hasAssets?: boolean;
+  uploadId?: string; // Added for asset mapping
 };
 
 type UploadError = { scope: 'single' | 'zip'; message: string };
@@ -54,6 +55,7 @@ interface SingleUploadResponse {
 }
 
 interface ZipUploadResponse {
+  uploadId: string; // Add uploadId to track ZIP uploads
   extractedFiles: Array<{
     fileId: string;
     fileName: string;
@@ -257,7 +259,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
             html: mainItem.html,
             previewUrl: mainItem.previewUrl,
             assetCount: data.zipAnalysis.counts.total,
-            hasAssets: data.zipAnalysis.counts.total > 0
+            hasAssets: data.zipAnalysis.counts.total > 0,
+            uploadId: data.zipAnalysis.uploadId // Store uploadId for asset mapping
           };
 
           addFiles([uploadedFile]);
@@ -338,6 +341,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           html: /\.html?$/i.test(f.fileName),
           // Backend implements thumbnail generation, f.previewUrl contains the thumbnail URL
           previewUrl: f.previewUrl || (isImageFile ? f.fileUrl : undefined),
+          uploadId: data.uploadId // Store uploadId for asset mapping
         };
       });
 
