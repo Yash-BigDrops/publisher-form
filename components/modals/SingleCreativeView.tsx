@@ -1088,7 +1088,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                         ) : (
                           <div className="p-4 text-center text-gray-500">
                             <p className="text-sm">
-                              Click the "Analyze Creative" button to start proofreading.
+                              Click the &quot;Analyze Creative&quot; button to start proofreading.
                             </p>
                           </div>
                         )}

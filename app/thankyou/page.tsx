@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { CheckCircle, Mail, Clock, ArrowRight, File, FileArchive, PencilLine } from 'lucide-react'
+import React, { useState, useEffect, Suspense } from 'react'
+import { Mail, ArrowRight, File, FileArchive, PencilLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -9,7 +9,7 @@ import Image from 'next/image'
 import { Constants } from '@/app/Constants/Constants'
 import { useSearchParams } from 'next/navigation'
 
-export default function ThankYouPage() {
+function ThankYouPageContent() {
   const searchParams = useSearchParams()
   const [submissionType, setSubmissionType] = useState<'single' | 'multiple' | null>(null)
   const [fileCount, setFileCount] = useState<number>(0)
@@ -111,7 +111,7 @@ export default function ThankYouPage() {
           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
             <h3 className="font-semibold text-gray-900 mb-2">Important Notes:</h3>
             <ul className="text-sm text-gray-700 space-y-1">
-              <li>• Please check your spam/junk folder if you don't receive the email</li>
+              <li>• Please check your spam/junk folder if you don&apos;t receive the email</li>
               <li>• Keep your submission ID safe for future reference</li>
               <li>• You can submit additional creatives at any time</li>
               <li>• For urgent inquiries, contact our support team</li>
@@ -143,5 +143,20 @@ export default function ThankYouPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function ThankYouPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-screen py-8 px-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
+          <p className="text-lg text-gray-600">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ThankYouPageContent />
+    </Suspense>
   )
 }
