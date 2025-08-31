@@ -1,14 +1,16 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Constants } from '@/app/Constants/Constants'
 import Image from 'next/image'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
+import { ValidationSummary } from '@/components/ui/validation-summary'
 import PersonalDetails from '@/app/Form/Steps/PersonalDetails'
 import ContactDetails from '@/app/Form/Steps/ContactDetails'
 import CreativeDetails from '@/app/Form/Steps/CreativeDetails'
+import { useFormValidation } from '@/hooks/useFormValidation'
 
 type FileMeta = { 
   id: string; 
@@ -25,7 +27,7 @@ const CreativeForm = () => {
   
   const [files, setFiles] = useState<FileMeta[]>([])
   
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     affiliateId: '',
     companyName: '',
     firstName: '',
@@ -51,22 +53,82 @@ const CreativeForm = () => {
       fileSize: number;
       fileType: string;
     }>
-  })
+  }
+  
+  const [formData, setFormData] = useState(initialFormData)
   
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // Initialize validation hook
+  const validationHook = useFormValidation(initialFormData)
+
   const handleNext = () => {
     if (currentStep < Constants.totalSteps) {
-      setCurrentStep(currentStep + 1)
+      // Validate current step before proceeding
+      let isStepValid = false
+      
+      switch (currentStep) {
+        case 1:
+          const personalValidation = validationHook.validatePersonalDetailsStep(formData)
+          isStepValid = personalValidation.isValid
+          break
+        case 2:
+          const contactValidation = validationHook.validateContactDetailsStep(formData)
+          isStepValid = contactValidation.isValid
+          break
+        case 3:
+          const creativeValidation = validationHook.validateCreativeDetailsStep(formData, files.length > 0, false)
+          isStepValid = creativeValidation.isValid
+          break
+        default:
+          isStepValid = true
+      }
+      
+      if (isStepValid) {
+        setCurrentStep(currentStep + 1)
+        // Clear errors when moving to next step
+        validationHook.clearErrors()
+      } else {
+        // Mark all fields in current step as touched to show errors
+        if (currentStep === 1) {
+          ['affiliateId', 'companyName', 'firstName', 'lastName'].forEach(field => {
+            validationHook.markFieldAsTouched(field)
+          })
+        } else if (currentStep === 2) {
+          ['email'].forEach(field => {
+            validationHook.markFieldAsTouched(field)
+          })
+          if (formData.telegramId && formData.telegramId !== '@') {
+            validationHook.markFieldAsTouched('telegramId')
+          }
+        } else if (currentStep === 3) {
+          ['offerId', 'creativeType', 'priority'].forEach(field => {
+            validationHook.markFieldAsTouched(field)
+          })
+        }
+      }
     }
   }
   
   const handleFormDataChange = (stepData: Partial<typeof formData>) => {
-    setFormData(prev => ({ ...prev, ...stepData }))
+    setFormData(prev => {
+      const newData = { ...prev, ...stepData }
+      return newData
+    })
   }
   
   const handleSubmit = async () => {
     if (currentStep !== Constants.totalSteps) return
+    
+    // Validate complete form before submission
+    const completeValidation = validationHook.validateCompleteFormData(formData, files.length > 0, false)
+    if (!completeValidation.isValid) {
+      // Mark all fields as touched to show errors
+      Object.keys(completeValidation.errors).forEach(field => {
+        validationHook.markFieldAsTouched(field)
+      })
+      return
+    }
     
     setIsSubmitting(true)
     try {
@@ -197,6 +259,8 @@ const CreativeForm = () => {
   const handlePrev = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1)
+      // Clear errors when going back
+      validationHook.clearErrors()
     }
   }
 
@@ -207,6 +271,7 @@ const CreativeForm = () => {
           <PersonalDetails 
             formData={formData}
             onDataChange={handleFormDataChange}
+            validationHook={validationHook}
           />
         )
       case 2:
@@ -214,16 +279,18 @@ const CreativeForm = () => {
           <ContactDetails 
             formData={formData}
             onDataChange={handleFormDataChange}
+            validationHook={validationHook}
           />
         )
-              case 3:
-          return (
-            <CreativeDetails 
-              formData={formData}
-              onDataChange={handleFormDataChange}
-              onFilesChange={setFiles}
-            />
-          )
+      case 3:
+        return (
+          <CreativeDetails 
+            formData={formData}
+            onDataChange={handleFormDataChange}
+            onFilesChange={setFiles}
+            validationHook={validationHook}
+          />
+        )
       default:
         return <div>Step not found</div>
     }
@@ -242,6 +309,30 @@ const CreativeForm = () => {
       return { prev: Constants.buttonTexts.prevStep2, next: Constants.buttonTexts.submit }
     }
   }
+
+  // Check if current step is valid for enabling next button
+  const isCurrentStepValid = useCallback(() => {
+    // Check if required fields have values for the current step
+    switch (currentStep) {
+      case 1:
+        return Boolean(
+          formData.affiliateId?.trim() && 
+          formData.companyName?.trim() && 
+          formData.firstName?.trim() && 
+          formData.lastName?.trim()
+        )
+      case 2:
+        return Boolean(formData.email?.trim())
+      case 3:
+        return Boolean(
+          formData.offerId?.trim() && 
+          formData.creativeType?.trim() && 
+          formData.priority?.trim()
+        )
+      default:
+        return true
+    }
+  }, [currentStep, formData])
 
   return (
     <div className="flex flex-col items-center min-h-screen py-8 px-4" 
@@ -270,24 +361,24 @@ const CreativeForm = () => {
                 {getStepContent()}
             </CardContent>
             <CardFooter>
-                            <div className="flex flex-col justify-between gap-4 w-full">
-                {currentStep > 1 && (
+                <div className="flex flex-col justify-between gap-4 w-full">
+                    {currentStep > 1 && (
+                        <Button 
+                            variant="outline" 
+                            className="w-full" 
+                            onClick={handlePrev}
+                        >
+                            {getButtonText().prev}
+                        </Button>
+                    )}
                     <Button 
-                        variant="outline" 
                         className="w-full" 
-                        onClick={handlePrev}
+                        onClick={currentStep === Constants.totalSteps ? handleSubmit : handleNext}
+                        disabled={isSubmitting || (currentStep < Constants.totalSteps && !isCurrentStepValid())}
                     >
-                        {getButtonText().prev}
+                        {isSubmitting ? 'Submitting...' : getButtonText().next}
                     </Button>
-                )}
-                <Button 
-                    className="w-full" 
-                    onClick={currentStep === Constants.totalSteps ? handleSubmit : handleNext}
-                    disabled={isSubmitting}
-                >
-                    {isSubmitting ? 'Submitting...' : getButtonText().next}
-                </Button>
-            </div>
+                </div>
             </CardFooter>
         </Card>
     </div>

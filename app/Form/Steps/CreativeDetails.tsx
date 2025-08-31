@@ -6,10 +6,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ErrorMessage } from '@/components/ui/error-message'
 import { File, FileArchive, PencilLine, Search } from 'lucide-react'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { FileUploadModal, UploadType, FromSubjectLinesModal, SingleCreativeView, MultipleCreativeView } from '@/components/modals'
 import { formatFileSize } from '@/constants'
+import { useFormValidation } from '@/hooks/useFormValidation'
 
 type UploadedFileMeta = {
   id: string;           
@@ -75,9 +77,15 @@ interface CreativeDetailsProps {
   };
   onDataChange: (data: Partial<CreativeDetailsProps['formData']>) => void;
   onFilesChange?: (files: UploadedFileMeta[]) => void;
+  validationHook?: ReturnType<typeof useFormValidation>;
 }
 
-const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChange, onFilesChange }) => {
+const CreativeDetails: React.FC<CreativeDetailsProps> = ({ 
+  formData, 
+  onDataChange, 
+  onFilesChange,
+  validationHook 
+}) => {
   
   const [offerSearchTerm, setOfferSearchTerm] = useState('')
   const [offerOptions, setOfferOptions] = useState<Array<{label: string; value: string}>>([])
@@ -153,31 +161,53 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     if (fieldName === 'offerId') {
       setOfferSearchTerm('')
     }
+    
+    // Trigger validation if validation hook is provided
+    if (validationHook) {
+      validationHook.handleFieldChange(fieldName, value, true)
+    }
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     onDataChange({ [name]: value })
+    
+    // Trigger validation if validation hook is provided
+    if (validationHook) {
+      validationHook.handleFieldChange(name, value, true)
+    }
   }
   
   // File management helpers
-  const addFiles = (files: UploadedFileMeta[]) => {
+  const addFiles = useCallback((files: UploadedFileMeta[]) => {
     setUploadedFiles(prev => {
       const updated = [...prev, ...files]
       // Update hasUploadedFiles based on the new array length
       setHasUploadedFiles(updated.length > 0)
+      
+      // Update validation hook state
+      if (validationHook) {
+        validationHook.updateFileUploadState(updated.length > 0)
+      }
+      
       return updated
     })
-  }
+  }, [validationHook])
 
-  const removeFile = (id: string) => {
+  const removeFile = useCallback((id: string) => {
     setUploadedFiles(prev => {
       const updated = prev.filter(f => f.id !== id)
       // Update hasUploadedFiles based on the new array length
       setHasUploadedFiles(updated.length > 0)
+      
+      // Update validation hook state
+      if (validationHook) {
+        validationHook.updateFileUploadState(updated.length > 0)
+      }
+      
       return updated
     })
-  }
+  }, [validationHook])
 
   const makeThumb = (file: File) =>
     new Promise<string | undefined>((resolve) => {
@@ -190,21 +220,21 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const resetFeedback = () => { setLastError(null); setProgress(null) }
 
   // Open Single Creative View Modal
-  const openSingleCreativeView = (creative: UploadedFileMeta) => {
+  const openSingleCreativeView = useCallback((creative: UploadedFileMeta) => {
     setSelectedCreative(creative)
     setIsSingleCreativeViewOpen(true)
-  }
+  }, [])
 
   // Open Multiple Creative View Modal
-  const openMultipleCreativeView = (creatives: UploadedFileMeta[], fileName?: string) => {
+  const openMultipleCreativeView = useCallback((creatives: UploadedFileMeta[], fileName?: string) => {
     setSelectedCreatives(creatives)
     setZipFileName(fileName || '')
     setUploadedZipFileName(fileName || '') // Persist ZIP filename for summary
     setIsMultipleCreativeViewOpen(true)
-  }
+  }, [])
 
   // Handle removing a creative from the multiple view
-  const handleRemoveCreative = (creativeId: string) => {
+  const handleRemoveCreative = useCallback((creativeId: string) => {
     // Remove from selectedCreatives
     setSelectedCreatives(prev => prev.filter(creative => creative.id !== creativeId))
     
@@ -212,14 +242,25 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     setUploadedFiles(prev => {
       const updated = prev.filter(file => file.id !== creativeId)
       setHasUploadedFiles(updated.length > 0)
+      
+      // Update validation hook state
+      if (validationHook) {
+        validationHook.updateFileUploadState(updated.length > 0)
+      }
+      
       return updated
     })
-  }
+  }, [validationHook])
 
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
     onDataChange({ [name]: value })
-  }
+    
+    // Trigger validation if validation hook is provided
+    if (validationHook) {
+      validationHook.handleFieldChange(name, value, true)
+    }
+  }, [onDataChange, validationHook])
   
     // File upload handlers
   const handleSingleFileUpload = async (file: File): Promise<{ uploadId?: string }> => {
@@ -371,6 +412,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
      
      // Set flag to show uploaded lines instead of upload buttons
      setHasFromSubjectLines(true)
+     
+     // Update validation hook state
+     if (validationHook) {
+       validationHook.updateFromSubjectLinesState(true)
+     }
    }
   
   // Handle viewing from/subject lines
@@ -382,6 +428,11 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   const handleDeleteFromSubjectLines = () => {
     onDataChange({ fromLines: '', subjectLines: '' })
     setHasFromSubjectLines(false)
+    
+    // Update validation hook state
+    if (validationHook) {
+      validationHook.updateFromSubjectLinesState(false)
+    }
   }
 
   // Handle viewing uploaded files
@@ -412,11 +463,21 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     setProgress(null)
     // Close upload modal if it's open to reset its state
     setIsUploadModalOpen(false)
+    
+    // Update validation hook state
+    if (validationHook) {
+      validationHook.updateFileUploadState(false)
+    }
   }
   
   // Handle priority change
   const handlePriorityChange = (priority: string) => {
     onDataChange({ priority })
+    
+    // Trigger validation if validation hook is provided
+    if (validationHook) {
+      validationHook.handleFieldChange('priority', priority, true)
+    }
   }
   
   // Separate fields by type for proper ordering
@@ -452,7 +513,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
               }
             }}
           >
-            <SelectTrigger className="w-full h-12">
+            <SelectTrigger className={`w-full h-12 ${validationHook && validationHook.hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}>
               <SelectValue placeholder={field.placeholder} />
             </SelectTrigger>
             <SelectContent>
@@ -489,7 +550,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       // Regular select for other fields
       return (
         <Select value={formData[field.name as keyof typeof formData]} onValueChange={(value) => handleSelectChange(field.name, value)}>
-          <SelectTrigger className="w-full h-12">
+          <SelectTrigger className={`w-full h-12 ${validationHook && validationHook.hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}>
             <SelectValue placeholder={field.placeholder || 'Select an option'} />
           </SelectTrigger>
           <SelectContent>
@@ -528,7 +589,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           onChange={handleTextareaChange}
           placeholder={field.placeholder}
           rows={4}
-          className="w-full h-24 px-3 py-2 border border-color-border rounded-md focus:outline-none focus:ring-2 focus:ring-color-ring focus:border-transparent resize-none bg-white"
+          className={`w-full h-24 px-3 py-2 border border-color-border rounded-md focus:outline-none focus:ring-2 focus:ring-color-ring focus:border-transparent resize-none bg-white ${validationHook && validationHook.hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
         />
       )
     } else {
@@ -540,10 +601,26 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           value={formData[field.name as keyof typeof formData]}
           onChange={handleInputChange}
           placeholder={field.placeholder}
-          className="w-full h-10 px-3 py-2 border border-color-border rounded-md focus:outline-none focus:ring-2 focus:ring-color-ring focus:border-transparent"
+          className={`w-full h-10 px-3 py-2 border border-color-border rounded-md focus:outline-none focus:ring-2 focus:ring-color-ring focus:border-transparent ${validationHook && validationHook.hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
         />
       )
     }
+  }
+
+  // Helper functions for validation display
+  const getFieldError = (fieldName: string): string => {
+    if (!validationHook) return ''
+    return validationHook.getFieldErrorMessage(fieldName)
+  }
+
+  const hasFieldError = (fieldName: string): boolean => {
+    if (!validationHook) return false
+    return validationHook.hasFieldError(fieldName)
+  }
+
+  const isFieldTouched = (fieldName: string): boolean => {
+    if (!validationHook) return false
+    return validationHook.isFieldTouched(fieldName)
   }
 
   return (
@@ -554,6 +631,10 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           <div key={field.name} className="space-y-2">
             <Label htmlFor={field.name}>{field.label}</Label>
             {renderField(field)}
+            <ErrorMessage 
+              message={getFieldError(field.name)}
+              show={isFieldTouched(field.name) && hasFieldError(field.name)}
+            />
           </div>
         ))}
       </div>
@@ -813,6 +894,10 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
             </button>
           ))}
         </div>
+        <ErrorMessage 
+          message={getFieldError('priority')}
+          show={isFieldTouched('priority') && hasFieldError('priority')}
+        />
       </div>
       
       {/* Textarea Fields (Additional Notes) */}
@@ -821,6 +906,10 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           <div key={field.name} className="space-y-2">
             <Label htmlFor={field.name}>{field.label}</Label>
             {renderField(field)}
+            <ErrorMessage 
+              message={getFieldError(field.name)}
+              show={isFieldTouched(field.name) && hasFieldError(field.name)}
+            />
           </div>
         ))}
       </div>
