@@ -1047,7 +1047,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                        Issues Found ({proofreadingData.issues?.length || 0})
+                        Issues Found ({proofreadingData.issues?.length || ''})
                       </h4>
                       
                       <div className="space-y-2">
@@ -1111,7 +1111,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                                   className="p-3 bg-blue-50 border border-blue-200 rounded-lg"
                                 >
                               <div className="flex items-start gap-2">
-                                    <span className="text-sm px-2 py-1 rounded text-xs font-medium bg-blue-200 text-blue-800">
+                                    <span className="text-xs px-2 py-1 rounded text-xs font-medium bg-blue-200 text-blue-800 whitespace-nowrap overflow-hidden text-ellipsis">
                                       {suggestion.type}
                                     </span>
                                     <p className="text-sm text-blue-800">
