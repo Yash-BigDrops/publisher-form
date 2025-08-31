@@ -5,6 +5,7 @@ export interface FileUploadState {
   uploadStatus: 'idle' | 'uploading' | 'success' | 'error'
   errorMessage: string
   dragActive: boolean
+  uploadProgress: number
 }
 
 export interface FileUploadHandlers {
@@ -13,18 +14,20 @@ export interface FileUploadHandlers {
   handleFileSelect: (file: File) => void
   handleFileInput: (e: React.ChangeEvent<HTMLInputElement>) => void
   resetState: () => void
+  updateProgress: (progress: number) => void
 }
 
 export const useFileUpload = (
   allowedTypes: string[],
   maxSizeMB: number,
-  onFileUpload: (file: File) => void | Promise<void>
+  onFileUpload: (file: File) => void | Promise<void> | Promise<{ uploadId?: string }>
 ) => {
   const [state, setState] = useState<FileUploadState>({
     selectedFile: null,
     uploadStatus: 'idle',
     errorMessage: '',
-    dragActive: false
+    dragActive: false,
+    uploadProgress: 0
   })
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -82,17 +85,19 @@ export const useFileUpload = (
       ...prev,
       selectedFile: file,
       uploadStatus: 'uploading',
-      errorMessage: ''
+      errorMessage: '',
+      uploadProgress: 0
     }))
 
     try {
       await Promise.resolve(onFileUpload(file))
-      setState(prev => ({ ...prev, uploadStatus: 'success' }))
+      setState(prev => ({ ...prev, uploadStatus: 'success', uploadProgress: 100 }))
     } catch (e) {
       setState(prev => ({
         ...prev,
         uploadStatus: 'error',
-        errorMessage: 'Upload failed. Please try again.'
+        errorMessage: 'Upload failed. Please try again.',
+        uploadProgress: 0
       }))
     }
   }, [allowedTypes, maxSizeMB, onFileUpload])
@@ -108,8 +113,13 @@ export const useFileUpload = (
       selectedFile: null,
       uploadStatus: 'idle',
       errorMessage: '',
-      dragActive: false
+      dragActive: false,
+      uploadProgress: 0
     })
+  }, [])
+
+  const updateProgress = useCallback((progress: number) => {
+    setState(prev => ({ ...prev, uploadProgress: progress }))
   }, [])
 
   const startUpload = useCallback(async () => {
@@ -117,13 +127,14 @@ export const useFileUpload = (
     if (!state.selectedFile) return
     try {
       onFileUpload(state.selectedFile)
-      setState(prev => ({ ...prev, uploadStatus: 'success' }))
+      setState(prev => ({ ...prev, uploadStatus: 'success', uploadProgress: 100 }))
       resetState()
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
         uploadStatus: 'error',
-        errorMessage: 'Upload failed. Please try again.'
+        errorMessage: 'Upload failed. Please try again.',
+        uploadProgress: 0
       }))
     }
   }, [state.selectedFile, onFileUpload, resetState])
@@ -135,7 +146,8 @@ export const useFileUpload = (
       handleDrop,
       handleFileSelect,
       handleFileInput,
-      resetState
+      resetState,
+      updateProgress
     },
     startUpload
   }

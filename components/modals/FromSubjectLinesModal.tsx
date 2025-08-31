@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { X, PencilLine, Info } from 'lucide-react'
+import { X, Sparkles, Info, PencilLine } from 'lucide-react'
 import { Constants } from '@/app/Constants/Constants'
 
 interface FromSubjectLinesModalProps {
@@ -13,6 +13,7 @@ interface FromSubjectLinesModalProps {
   onSave: (fromLines: string, subjectLines: string) => void
   initialFromLines?: string
   initialSubjectLines?: string
+  isMultipleCreative?: boolean // Add prop to indicate if this is multiple creative upload
 }
 
 const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
@@ -20,7 +21,8 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   onClose,
   onSave,
   initialFromLines = '',
-  initialSubjectLines = ''
+  initialSubjectLines = '',
+  isMultipleCreative = false
 }) => {
   const [fromLines, setFromLines] = useState(initialFromLines)
   const [subjectLines, setSubjectLines] = useState(initialSubjectLines)
@@ -166,6 +168,22 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
             <span>{Constants.fromSubjectLinesConfig.characterCount.fromLines.replace('{count}', fromLines.length.toString())}</span>
             <span>{Constants.fromSubjectLinesConfig.characterCount.subjectLines.replace('{count}', subjectLines.length.toString())}</span>
           </div>
+
+          {/* Generate From and Subject Lines Button - Only show for multiple creative uploads */}
+          {isMultipleCreative && (
+            <div className="pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // TODO: Implement AI generation logic
+                }}
+                className="w-full border-green-300 text-green-700 hover:bg-green-50"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Generate From & Subject Lines
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

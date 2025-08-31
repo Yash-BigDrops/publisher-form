@@ -222,7 +222,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
   }
   
     // File upload handlers
-  const handleSingleFileUpload = async (file: File) => {
+  const handleSingleFileUpload = async (file: File): Promise<{ uploadId?: string }> => {
     resetFeedback();
     try {
       setUploading(true);
@@ -263,12 +263,13 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
           addFiles([uploadedFile]);
           setProgress(100);
           openSingleCreativeView(uploadedFile);
-          return;
+          // Return upload ID for progress tracking
+          return { uploadId: data.zipAnalysis.uploadId };
         } else {
           // Redirect to multiple creatives flow
           console.log('ZIP contains multiple creatives, redirecting to multiple upload flow');
-          await handleMultipleFileUpload(file);
-          return;
+          const result = await handleMultipleFileUpload(file);
+          return result;
         }
       }
 
@@ -300,6 +301,9 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       
       // Open SingleCreativeView immediately (modal will close after this completes)
       openSingleCreativeView(uploadedFile);
+      
+      // For regular uploads, we don't have an upload ID, so return empty object
+      return {};
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'Upload failed';
       setLastError({ scope: 'single', message: errorMessage });
@@ -310,7 +314,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
     }
   }
   
-  const handleMultipleFileUpload = async (file: File) => {
+  const handleMultipleFileUpload = async (file: File): Promise<{ uploadId?: string }> => {
     resetFeedback();
     try {
       setUploading(true);
@@ -348,6 +352,9 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       if (mapped.length > 0) {
         openMultipleCreativeView(mapped, file.name);
       }
+      
+      // For ZIP uploads, we don't have an upload ID in the current response, so return empty object
+      return {};
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'ZIP extraction failed';
       setLastError({ scope: 'zip', message: errorMessage });
@@ -553,134 +560,158 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
       
       {/* Upload Creative Buttons or Uploaded Content */}
       <div className="space-y-4">
-        <Label className="text-base font-medium">
-          {hasFromSubjectLines ? 'Uploaded From & Subject Lines' : hasUploadedFiles ? 'Uploaded Files' : 'Upload Creatives'}
-        </Label>
+        {/* Show uploaded files if available */}
+        {hasUploadedFiles && (
+          <div className="space-y-3">
+            <Label className="text-base font-medium">Uploaded Files</Label>
+            <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {uploadedZipFileName ? (
+                    <FileArchive className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <File className="h-5 w-5 text-green-600" />
+                  )}
+                  <div>
+                    <p className="font-medium text-green-800">
+                      {uploadedFiles.length === 1 
+                        ? uploadedFiles[0].name 
+                        : (uploadedZipFileName || `${uploadedFiles.length} Files Uploaded`)
+                      }
+                    </p>
+                    <p className="text-sm text-green-600">
+                      {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} • {uploadedFiles.reduce((total, file) => total + file.size, 0) > 0 ? formatFileSize(uploadedFiles.reduce((total, file) => total + file.size, 0)) : '0 B'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleViewUploadedFiles}
+                    className="text-green-700 border-green-300 hover:bg-green-100"
+                  >
+                    View
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteUploadedFiles}
+                    className="text-red-700 border-red-300 hover:bg-red-100"
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+              
+              {/* From & Subject Lines button - Only show when creativeType is email and no from/subject lines yet */}
+              {formData.creativeType === 'email' && !hasFromSubjectLines && (
+                <div className="mt-4 pt-4 border-t border-green-200">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsFromSubjectLinesModalOpen(true)}
+                    className="w-full border-green-300 text-green-700 hover:bg-green-100"
+                  >
+                    <PencilLine className="h-4 w-4 mr-2" />
+                    From & Subject Lines
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         
-        {hasFromSubjectLines ? (
-          // Show uploaded from/subject lines with view/delete buttons
-          <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <PencilLine className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="font-medium text-green-800">From & Subject Lines Uploaded</p>
-                  <p className="text-sm text-green-600">
-                    {formData.fromLines.split('\n').length} from lines • {formData.subjectLines.split('\n').length} subject lines
-                  </p>
+        {/* Show uploaded from/subject lines if available */}
+        {hasFromSubjectLines && (
+          <div className="space-y-3">
+            <Label className="text-base font-medium">From & Subject Lines</Label>
+            <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <PencilLine className="h-5 w-5 text-green-600" />
+                  <div>
+                    <p className="font-medium text-green-800">From & Subject Lines Uploaded</p>
+                    <p className="text-sm text-green-600">
+                      {formData.fromLines.split('\n').length} from lines • {formData.subjectLines.split('\n').length} subject lines
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleViewFromSubjectLines}
-                  className="text-green-700 border-green-300 hover:bg-green-100"
-                >
-                  View
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDeleteFromSubjectLines}
-                  className="text-red-700 border-red-300 hover:bg-red-100"
-                >
-                  Delete
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleViewFromSubjectLines}
+                    className="text-green-700 border-green-300 hover:bg-green-100"
+                  >
+                    View
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteFromSubjectLines}
+                    className="text-red-700 border-red-300 hover:bg-red-100"
+                  >
+                    Delete
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        ) : hasUploadedFiles ? (
-          // Show uploaded files summary with view/delete buttons
-          <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {uploadedZipFileName ? (
-                  <FileArchive className="h-5 w-5 text-green-600" />
-                ) : (
-                  <File className="h-5 w-5 text-green-600" />
-                )}
-                <div>
-                  <p className="font-medium text-green-800">
-                    {uploadedFiles.length === 1 
-                      ? uploadedFiles[0].name 
-                      : (uploadedZipFileName || `${uploadedFiles.length} Files Uploaded`)
-                    }
-                  </p>
-                  <p className="text-sm text-green-600">
-                    {uploadedFiles.length} file{uploadedFiles.length !== 1 ? 's' : ''} • {uploadedFiles.reduce((total, file) => total + file.size, 0) > 0 ? formatFileSize(uploadedFiles.reduce((total, file) => total + file.size, 0)) : '0 B'}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleViewUploadedFiles}
-                  className="text-green-700 border-green-300 hover:bg-green-100"
-                >
-                  View
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDeleteUploadedFiles}
-                  className="text-red-700 border-red-300 hover:bg-red-100"
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          // Show upload buttons
-          <div className={`grid gap-4 ${formData.creativeType === 'email' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
-            {/* Single Creative - Always visible */}
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
-              onClick={() => {
-                // Reset any previous upload state
-                setLastError(null)
-                setProgress(null)
-                setCurrentUploadType('single')
-                setIsUploadModalOpen(true)
-              }}
-            >
-              <File className="text-blue-400" style={{ width: '20px', height: '20px' }} />
-              <span className="text-sm font-medium text-center">Single Creative</span>
-            </Button>
-
-            {/* Multiple Creatives - Always visible */}
-            <Button
-              variant="outline"
-              className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
-              onClick={() => {
-                // Reset any previous upload state
-                setLastError(null)
-                setProgress(null)
-                setCurrentUploadType('multiple')
-                setIsUploadModalOpen(true)
-              }}
-            >
-              <FileArchive className="text-blue-400" style={{ width: '20px', height: '20px' }} />
-              <span className="text-sm font-medium text-center">Multiple Creatives</span>
-            </Button>
-
-            {/* From & Subject Lines - Only visible when Email is selected */}
-            {formData.creativeType === 'email' && (
+        )}
+        
+        {/* Show upload buttons only when neither section has content */}
+        {!hasFromSubjectLines && !hasUploadedFiles && (
+          <div className="space-y-3">
+            <Label className="text-base font-medium">Upload Creatives</Label>
+            <div className={`grid gap-4 ${formData.creativeType === 'email' ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'}`}>
+              {/* Single Creative - Always visible */}
               <Button
                 variant="outline"
                 className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
-                onClick={() => setIsFromSubjectLinesModalOpen(true)}
+                onClick={() => {
+                  // Reset any previous upload state
+                  setLastError(null)
+                  setProgress(null)
+                  setCurrentUploadType('single')
+                  setIsUploadModalOpen(true)
+                }}
               >
-                <PencilLine className="text-blue-400" style={{ width: '20px', height: '20px' }} />
-                <span className="text-sm font-medium text-center">From & Subject Lines</span>
+                <File className="text-blue-400" style={{ width: '20px', height: '20px' }} />
+                <span className="text-sm font-medium text-center">Single Creative</span>
               </Button>
-            )}
-                     </div>
-         )}
-       </div>
+
+              {/* Multiple Creatives - Always visible */}
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
+                onClick={() => {
+                  // Reset any previous upload state
+                  setLastError(null)
+                  setProgress(null)
+                  setCurrentUploadType('multiple')
+                  setIsUploadModalOpen(true)
+                }}
+              >
+                <FileArchive className="text-blue-400" style={{ width: '20px', height: '20px' }} />
+                <span className="text-sm font-medium text-center">Multiple Creatives</span>
+              </Button>
+
+              {/* From & Subject Lines - Only visible when Email is selected */}
+              {formData.creativeType === 'email' && (
+                <Button
+                  variant="outline"
+                  className="h-20 flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-color-border hover:border-blue-400 hover:bg-blue-50 transition-all duration-200"
+                  onClick={() => setIsFromSubjectLinesModalOpen(true)}
+                >
+                  <PencilLine className="text-blue-400" style={{ width: '20px', height: '20px' }} />
+                  <span className="text-sm font-medium text-center">From & Subject Lines</span>
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
        
        {/* Uploaded files preview/list - Only show when not in summary mode */}
        {uploadedFiles.length > 0 && !hasUploadedFiles && (
@@ -750,6 +781,20 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
          </div>
        )}
        
+       {/* From & Subject Lines button below uploaded files - Only show when creativeType is email and no from/subject lines yet */}
+       {uploadedFiles.length > 0 && !hasUploadedFiles && formData.creativeType === 'email' && !hasFromSubjectLines && (
+         <div className="mt-4 text-center">
+           <Button
+             variant="outline"
+             onClick={() => setIsFromSubjectLinesModalOpen(true)}
+             className="w-full border-green-300 text-green-700 hover:bg-green-50"
+           >
+             <PencilLine className="h-4 w-4 mr-2" />
+             From & Subject Lines
+           </Button>
+         </div>
+       )}
+       
        {/* Priority Toggle */}
       <div className="space-y-3">
         <Label className="text-base font-medium text-gray-700">Set Priority</Label>
@@ -786,6 +831,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
         onClose={() => setIsUploadModalOpen(false)}
         uploadType={currentUploadType}
         onFileUpload={currentUploadType === 'single' ? handleSingleFileUpload : handleMultipleFileUpload}
+        creativeType={formData.creativeType}
+        onFromSubjectLinesSave={handleFromSubjectLinesSave}
       />
       
       {/* From & Subject Lines Modal */}
@@ -795,6 +842,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({ formData, onDataChang
         onSave={handleFromSubjectLinesSave}
         initialFromLines={formData.fromLines}
         initialSubjectLines={formData.subjectLines}
+        isMultipleCreative={uploadedFiles.some(file => file.source === 'zip')}
       />
       
       {/* Single Creative View Modal */}
