@@ -184,30 +184,18 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
       const updated = [...prev, ...files]
       // Update hasUploadedFiles based on the new array length
       setHasUploadedFiles(updated.length > 0)
-      
-      // Update validation hook state
-      if (validationHook) {
-        validationHook.updateFileUploadState(updated.length > 0)
-      }
-      
       return updated
     })
-  }, [validationHook])
+  }, [])
 
   const removeFile = useCallback((id: string) => {
     setUploadedFiles(prev => {
       const updated = prev.filter(f => f.id !== id)
       // Update hasUploadedFiles based on the new array length
       setHasUploadedFiles(updated.length > 0)
-      
-      // Update validation hook state
-      if (validationHook) {
-        validationHook.updateFileUploadState(updated.length > 0)
-      }
-      
       return updated
     })
-  }, [validationHook])
+  }, [])
 
   const makeThumb = (file: File) =>
     new Promise<string | undefined>((resolve) => {
@@ -242,15 +230,23 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
     setUploadedFiles(prev => {
       const updated = prev.filter(file => file.id !== creativeId)
       setHasUploadedFiles(updated.length > 0)
-      
-      // Update validation hook state
-      if (validationHook) {
-        validationHook.updateFileUploadState(updated.length > 0)
-      }
-      
       return updated
     })
-  }, [validationHook])
+  }, [])
+
+  // Sync file upload state with validation hook when uploadedFiles changes
+  useEffect(() => {
+    if (validationHook) {
+      validationHook.updateFileUploadState(uploadedFiles.length > 0)
+    }
+  }, [uploadedFiles.length, validationHook])
+
+  // Sync from/subject lines state with validation hook when hasFromSubjectLines changes
+  useEffect(() => {
+    if (validationHook) {
+      validationHook.updateFromSubjectLinesState(hasFromSubjectLines)
+    }
+  }, [hasFromSubjectLines, validationHook])
 
   const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -406,18 +402,13 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
     }
   }
   
-     const handleFromSubjectLinesSave = (fromLines: string, subjectLines: string) => {
-     // Store from and subject lines in form data
-     onDataChange({ fromLines, subjectLines })
-     
-     // Set flag to show uploaded lines instead of upload buttons
-     setHasFromSubjectLines(true)
-     
-     // Update validation hook state
-     if (validationHook) {
-       validationHook.updateFromSubjectLinesState(true)
-     }
-   }
+       const handleFromSubjectLinesSave = (fromLines: string, subjectLines: string) => {
+    // Store from and subject lines in form data
+    onDataChange({ fromLines, subjectLines })
+    
+    // Set flag to show uploaded lines instead of upload buttons
+    setHasFromSubjectLines(true)
+  }
   
   // Handle viewing from/subject lines
   const handleViewFromSubjectLines = () => {
@@ -428,11 +419,6 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   const handleDeleteFromSubjectLines = () => {
     onDataChange({ fromLines: '', subjectLines: '' })
     setHasFromSubjectLines(false)
-    
-    // Update validation hook state
-    if (validationHook) {
-      validationHook.updateFromSubjectLinesState(false)
-    }
   }
 
   // Handle viewing uploaded files
@@ -463,11 +449,6 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
     setProgress(null)
     // Close upload modal if it's open to reset its state
     setIsUploadModalOpen(false)
-    
-    // Update validation hook state
-    if (validationHook) {
-      validationHook.updateFileUploadState(false)
-    }
   }
   
   // Handle priority change

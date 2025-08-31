@@ -87,6 +87,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   // Content generation state
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
 
+  // Proofreading/analysis state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   // Load existing creative data when component mounts or creative changes
   React.useEffect(() => {
     if (isOpen && creative.id) {
@@ -450,6 +453,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   // Proofreading Functions
   const handleRegenerateAnalysis = async () => {
     try {
+      setIsAnalyzing(true);
       console.log("Starting proofreading analysis for creative:", creative.id);
 
       const isHtml = creative.html || creative.type === "html" || /\.html?$/i.test(creative.name);
@@ -542,6 +546,8 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
           brandAlignment: 0,
         },
       });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -1034,11 +1040,22 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                       variant="outline"
                       size="sm"
                       onClick={handleRegenerateAnalysis}
-                      className="flex items-center gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition-colors w-full sm:w-auto"
+                      disabled={isAnalyzing}
+                      className="flex items-center gap-2 text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800 transition-colors w-full sm:w-auto disabled:opacity-50"
                     >
-                      <Sparkles className="h-4 w-4" />
-                      <span className="hidden sm:inline">Analyze Creative</span>
-                      <span className="sm:hidden">Analyze</span>
+                      {isAnalyzing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" />
+                          <span className="hidden sm:inline">Analyzing...</span>
+                          <span className="sm:hidden">Analyzing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4" />
+                          <span className="hidden sm:inline">Analyze Creative</span>
+                          <span className="sm:hidden">Analyze</span>
+                        </>
+                      )}
                     </Button>
                   </div>
                   
@@ -1047,7 +1064,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                        Issues Found ({proofreadingData.issues?.length || ''})
+                        Issues Found{proofreadingData.issues !== undefined ? ` (${proofreadingData.issues.length})` : ''}
                       </h4>
                       
                       <div className="space-y-2">
@@ -1060,11 +1077,11 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                                 className="p-3 bg-red-50 border border-red-200 rounded-lg"
                               >
                               <div className="flex items-start gap-2">
-                                  <span className="text-sm px-2 py-1 rounded text-xs font-medium bg-red-200 text-red-800">
+                                  <span className="text-xs px-2 py-1 rounded font-medium bg-red-200 text-red-800 w-max text-nowrap">
                                     {issue.type}
                                   </span>
                                 <div className="flex-1">
-                                    <p className="text-sm font-medium text-red-800">
+                                    <p className="text-xs font-medium text-red-800">
                                       {issue.note || issue.type}
                                     </p>
                                     {issue.original && (
@@ -1101,7 +1118,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                            Suggestions ({proofreadingData.suggestions.length})
+                        Suggestions{proofreadingData.suggestions !== undefined ? ` (${proofreadingData.suggestions.length})` : ''}
                       </h4>
                       <div className="space-y-2">
                             {proofreadingData.suggestions.map(
@@ -1111,10 +1128,10 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                                   className="p-3 bg-blue-50 border border-blue-200 rounded-lg"
                                 >
                               <div className="flex items-start gap-2">
-                                    <span className="text-xs px-2 py-1 rounded text-xs font-medium bg-blue-200 text-blue-800 whitespace-nowrap overflow-hidden text-ellipsis">
+                                    <span className="text-xs px-2 py-1 rounded font-medium bg-blue-200 text-blue-800 w-max text-nowrap">
                                       {suggestion.type}
                                     </span>
-                                    <p className="text-sm text-blue-800">
+                                    <p className="text-xs text-blue-800">
                                     {suggestion.description}
                                   </p>
                                 </div>
