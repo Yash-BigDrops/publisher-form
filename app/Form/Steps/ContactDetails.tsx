@@ -2,8 +2,10 @@ import { Constants } from '@/app/Constants/Constants'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ErrorMessage } from '@/components/ui/error-message'
 import React, { useState } from 'react'
 import { TELEGRAM_BOT_URL } from '@/constants'
+import { useFormValidation } from '@/hooks/useFormValidation'
 
 interface ContactDetailsProps {
   formData: {
@@ -11,9 +13,14 @@ interface ContactDetailsProps {
     telegramId: string;
   };
   onDataChange: (data: Partial<ContactDetailsProps['formData']>) => void;
+  validationHook?: ReturnType<typeof useFormValidation>;
 }
 
-const ContactDetails: React.FC<ContactDetailsProps> = ({ formData, onDataChange }) => {
+const ContactDetails: React.FC<ContactDetailsProps> = ({ 
+  formData, 
+  onDataChange,
+  validationHook 
+}) => {
   
   const [isTelegramFocused, setIsTelegramFocused] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
@@ -42,9 +49,19 @@ const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     }
     
     onDataChange({ [name]: processedValue })
+    
+    // Trigger validation if validation hook is provided
+    if (validationHook) {
+      validationHook.handleFieldChange(name, processedValue, false) // Telegram is optional
+    }
   } else {
     // Normal handling for other fields
     onDataChange({ [name]: value })
+    
+    // Trigger validation if validation hook is provided
+    if (validationHook) {
+      validationHook.handleFieldChange(name, value, true) // Email is required
+    }
   }
 }
 
@@ -94,6 +111,11 @@ const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
       onDataChange({ [name]: '' })
     }
   }
+  
+  // Mark field as touched if validation hook is provided
+  if (validationHook) {
+    validationHook.handleFieldBlur(name)
+  }
 }
 
 const handleVerify = async () => {
@@ -125,6 +147,21 @@ const handleVerify = async () => {
   }
 }
 
+const getFieldError = (fieldName: string): string => {
+  if (!validationHook) return ''
+  return validationHook.getFieldErrorMessage(fieldName)
+}
+
+const hasFieldError = (fieldName: string): boolean => {
+  if (!validationHook) return false
+  return validationHook.hasFieldError(fieldName)
+}
+
+const isFieldTouched = (fieldName: string): boolean => {
+  if (!validationHook) return false
+  return validationHook.isFieldTouched(fieldName)
+}
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -145,7 +182,7 @@ const handleVerify = async () => {
                   onFocus={handleFocus}
                   onBlur={handleBlur}
                   onKeyDown={handleKeyDown}
-                  className="pr-20" // Add right padding for the button
+                  className={`pr-20 ${hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
                 />
                 <Button
                   variant="outline"
@@ -181,8 +218,15 @@ const handleVerify = async () => {
                 onFocus={handleFocus}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
+                className={hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
               />
             )}
+            
+            {/* Error Message */}
+            <ErrorMessage 
+              message={getFieldError(field.name)}
+              show={isFieldTouched(field.name) && hasFieldError(field.name)}
+            />
             
             {/* Show tip for Telegram field only when focused */}
             {field.name === 'telegramId' && isTelegramFocused && (

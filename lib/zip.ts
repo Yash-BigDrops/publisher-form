@@ -12,11 +12,34 @@ export type ZipProcessOptions = {
   maxDepth: number;
   perFileMaxBytes?: number;
   enableVirusScan?: boolean;
-  deduplicate?: boolean;
+  dedup?: boolean;
+  prioritizeHtml?: boolean; // New option to prioritize HTML over text files
 
   onEntry?: (info: { path: string; index: number; total: number }) => void;
   onProgress?: (pct: number) => void; 
 };
+
+// Function to check if a file is Mac metadata
+function isMacMetadata(path: string, fileName: string): boolean {
+  // Filter out Mac-specific metadata files
+  if (fileName.startsWith('._') || fileName.startsWith('.DS_Store')) return true;
+  if (path.includes('__MACOSX/')) return true;
+  if (path.includes('/._')) return true;
+  
+  // Filter out AppleDouble files and other Mac metadata
+  if (fileName.includes('com.apple.') || fileName.includes('ATTR')) return true;
+  
+  return false;
+}
+
+// Function to get file priority for sorting (higher number = higher priority)
+function getFilePriority(fileName: string, mime: string): number {
+  if (mime === 'text/html' || fileName.endsWith('.html') || fileName.endsWith('.htm')) return 10;
+  if (mime.startsWith('image/')) return 8;
+  if (mime === 'application/pdf') return 6;
+  if (mime === 'text/plain' || fileName.endsWith('.txt')) return 2;
+  return 1;
+}
 
 export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, depth = 0, seenHashes?: Set<string>) {
   if (depth > opts.maxDepth) return { extracted: [], totalBytes: 0, skipped: [{ reason: 'depth-limit' }] };
@@ -33,6 +56,7 @@ export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, 
     hash: string;
     depth: number;
     previewUrl?: string;
+    priority: number;
   }> = [];
   const skipped: Array<{
     path?: string;
@@ -48,6 +72,15 @@ export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, 
 
   for (const [path, entry] of entries) {
     if ((entry as JSZip.JSZipObject).dir) continue;
+    
+    const fileName = path.split('/').pop() || 'file';
+    
+    // Skip Mac metadata files
+    if (isMacMetadata(path, fileName)) {
+      skipped.push({ path, reason: 'mac-metadata' });
+      continue;
+    }
+    
     count++;
     processed++;
     
@@ -86,31 +119,39 @@ export async function processZipBuffer(zipBuf: Buffer, opts: ZipProcessOptions, 
     }
 
     const hash = sha256(buf);
-    if (opts.deduplicate && dedupSet.has(hash)) { skipped.push({ path, reason: 'duplicate' }); continue; }
+    if (opts.dedup && dedupSet.has(hash)) { skipped.push({ path, reason: 'duplicate' }); continue; }
     dedupSet.add(hash);
 
     const baseName = path.split('/').pop() || 'file';
-    const { id, fileName } = await saveBuffer(buf, baseName);
+    const { id, fileName: savedFileName } = await saveBuffer(buf, baseName);
 
     let previewUrl: string | undefined;
     if (mime.startsWith('image/') && mime !== 'image/svg+xml') {
       const thumb = await makeImagePreview(buf, 400);
       if (thumb) {
-        const prev = await saveBuffer(thumb, `preview_${fileName}.jpg`);
+        const prev = await saveBuffer(thumb, `preview_${savedFileName}.jpg`);
         previewUrl = `/api/files/${prev.id}/${prev.fileName}`;
       }
     }
 
+    const priority = getFilePriority(fileName, mime);
+    
     extracted.push({
       fileId: id,
-      fileName,
-      fileUrl: `/api/files/${id}/${fileName}`,
+      fileName: savedFileName,
+      fileUrl: `/api/files/${id}/${savedFileName}`,
       fileSize: buf.length,
       fileType: mime,
       hash,
       depth,
-      previewUrl
+      previewUrl,
+      priority
     });
+  }
+
+  // Sort by priority if HTML prioritization is enabled
+  if (opts.prioritizeHtml) {
+    extracted.sort((a, b) => b.priority - a.priority);
   }
 
   opts.onProgress?.(95);

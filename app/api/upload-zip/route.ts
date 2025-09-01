@@ -92,7 +92,10 @@ export async function POST(req: Request) {
       if (ENCRYPTED_POLICY === 'attempt' && password) {
         progressUpdate(uploadId, 12, 'decrypting encrypted entries');
         const dec = await extractEncryptedZipBuffer(buf, password, {
-          allow: ALLOW, enableVirusScan: ENABLE_SCAN, perFileMaxBytes: PER_FILE_MAX
+          allow: ALLOW, 
+          enableVirusScan: ENABLE_SCAN, 
+          perFileMaxBytes: PER_FILE_MAX,
+          prioritizeHtml: true // Enable HTML prioritization for encrypted files too
         });
         extracted.push(...dec.extracted);
         skipped.push(...dec.skipped);
@@ -109,7 +112,8 @@ export async function POST(req: Request) {
       maxDepth: MAX_DEPTH,
       perFileMaxBytes: PER_FILE_MAX,
       enableVirusScan: ENABLE_SCAN,
-      deduplicate: true,
+      dedup: true,
+      prioritizeHtml: true, // Enable HTML prioritization over text files
       
       onEntry: ({ path, index, total }) => {
         if (index % 5 === 0) progressUpdate(uploadId, Math.min(90, Math.round(15 + (index / Math.max(1, total)) * 70)), `processing: ${path}`);
