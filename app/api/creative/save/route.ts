@@ -25,14 +25,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     const {
+      affiliateId,
+      companyName,
+      firstName,
+      lastName,
+      email: contactEmail,
+      telegramId,
       offerId,
+      creativeType,
       fromLines,
       subjectLines,
       notes,
       priority = "Moderate",
-      email: contactEmail,
-      firstName,
-      lastName,
       files = [],
     } = body || {};
 
@@ -53,8 +57,9 @@ export async function POST(req: NextRequest) {
       const sub = await client.query(
         `INSERT INTO submissions (
           offer_id, priority, contact_method, contact_info, 
-          from_lines, subject_lines, other_request
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+          from_lines, subject_lines, other_request,
+          affiliate_id, company_name, telegram_id, creative_type
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         [
           String(offerId),
           String(priority),
@@ -63,12 +68,21 @@ export async function POST(req: NextRequest) {
           String(fromLines || ""),
           String(subjectLines || ""),
           String(notes || ""),
+          String(affiliateId || ""),
+          String(companyName || ""),
+          String(telegramId || ""),
+          String(creativeType || ""),
         ]
       );
 
       submissionId = sub.rows[0].id;
 
-      for (const f of files as Array<{ fileUrl: string; fileName?: string }>) {
+      for (const f of files as Array<{ 
+        fileName: string; 
+        fileUrl: string; 
+        fileType?: string; 
+        fileSize?: number; 
+      }>) {
         const meta = parseFileUrl(f.fileUrl);
         await client.query(
           `INSERT INTO submission_files (
@@ -79,7 +93,7 @@ export async function POST(req: NextRequest) {
             submissionId,
             meta.file_url ?? null,
             meta.file_key ?? null,
-            meta.original_filename ?? f.fileName ?? null,
+            f.fileName ?? meta.original_filename ?? null,
             fromLines ?? null,
             subjectLines ?? null,
             notes ?? null,

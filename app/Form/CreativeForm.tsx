@@ -1,50 +1,58 @@
-"use client"
+"use client";
 
-import React, { useState, useMemo, useCallback } from 'react'
-import { Constants } from '@/app/Constants/Constants'
-import Image from 'next/image'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
-import { ValidationSummary } from '@/components/ui/validation-summary'
-import PersonalDetails from '@/app/Form/Steps/PersonalDetails'
-import ContactDetails from '@/app/Form/Steps/ContactDetails'
-import CreativeDetails from '@/app/Form/Steps/CreativeDetails'
-import { useFormValidation } from '@/hooks/useFormValidation'
+import React, { useState, useMemo, useCallback } from "react";
+import { Constants } from "@/app/Constants/Constants";
+import { API_ENDPOINTS } from "@/constants/apiEndpoints";
+import Image from "next/image";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { ValidationSummary } from "@/components/ui/validation-summary";
+import PersonalDetails from "@/app/Form/Steps/PersonalDetails";
+import ContactDetails from "@/app/Form/Steps/ContactDetails";
+import CreativeDetails from "@/app/Form/Steps/CreativeDetails";
+import { useFormValidation } from "@/hooks/useFormValidation";
 
-type FileMeta = { 
-  id: string; 
-  name: string; 
-  url: string; 
-  size: number; 
-  type: string; 
-  source?: 'single'|'zip'; 
-  html?: boolean 
+type FileMeta = {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  type: string;
+  source?: "single" | "zip";
+  html?: boolean;
 };
 
 const CreativeForm = () => {
-  const [currentStep, setCurrentStep] = useState(1)
-  
-  const [files, setFiles] = useState<FileMeta[]>([])
-  
+  const [currentStep, setCurrentStep] = useState(1);
+
+  const [files, setFiles] = useState<FileMeta[]>([]);
+
   const initialFormData = {
-    affiliateId: '',
-    companyName: '',
-    firstName: '',
-    lastName: '',
-    
+    affiliateId: "",
+    companyName: "",
+    firstName: "",
+    lastName: "",
+
     // Contact Details
-    email: '',
-    telegramId: '',
-    
+    email: "",
+    telegramId: "",
+
     // Creative Details
-    offerId: '',
-    creativeType: '',
-    additionalNotes: '',
-    fromLines: '',
-    subjectLines: '',
-    priority: 'Medium',
-    
+    offerId: "",
+    creativeType: "",
+    additionalNotes: "",
+    fromLines: "",
+    subjectLines: "",
+    priority: "Medium",
+
     // Files (will be populated by upload handlers)
     uploadedFiles: [] as Array<{
       fileId: string;
@@ -52,85 +60,97 @@ const CreativeForm = () => {
       fileUrl: string;
       fileSize: number;
       fileType: string;
-    }>
-  }
-  
-  const [formData, setFormData] = useState(initialFormData)
-  
-  const [isSubmitting, setIsSubmitting] = useState(false)
+    }>,
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Initialize validation hook
-  const validationHook = useFormValidation(initialFormData)
+  const validationHook = useFormValidation(initialFormData);
 
   const handleNext = () => {
     if (currentStep < Constants.totalSteps) {
       // Validate current step before proceeding
-      let isStepValid = false
-      
+      let isStepValid = false;
+
       switch (currentStep) {
         case 1:
-          const personalValidation = validationHook.validatePersonalDetailsStep(formData)
-          isStepValid = personalValidation.isValid
-          break
+          const personalValidation =
+            validationHook.validatePersonalDetailsStep(formData);
+          isStepValid = personalValidation.isValid;
+          break;
         case 2:
-          const contactValidation = validationHook.validateContactDetailsStep(formData)
-          isStepValid = contactValidation.isValid
-          break
+          const contactValidation =
+            validationHook.validateContactDetailsStep(formData);
+          isStepValid = contactValidation.isValid;
+          break;
         case 3:
-          const creativeValidation = validationHook.validateCreativeDetailsStep(formData, files.length > 0, false)
-          isStepValid = creativeValidation.isValid
-          break
+          const creativeValidation = validationHook.validateCreativeDetailsStep(
+            formData,
+            files.length > 0,
+            false
+          );
+          isStepValid = creativeValidation.isValid;
+          break;
         default:
-          isStepValid = true
+          isStepValid = true;
       }
-      
+
       if (isStepValid) {
-        setCurrentStep(currentStep + 1)
+        setCurrentStep(currentStep + 1);
         // Clear errors when moving to next step
-        validationHook.clearErrors()
+        validationHook.clearErrors();
       } else {
         // Mark all fields in current step as touched to show errors
         if (currentStep === 1) {
-          ['affiliateId', 'companyName', 'firstName', 'lastName'].forEach(field => {
-            validationHook.markFieldAsTouched(field)
-          })
+          ["affiliateId", "companyName", "firstName", "lastName"].forEach(
+            (field) => {
+              validationHook.markFieldAsTouched(field);
+            }
+          );
         } else if (currentStep === 2) {
-          ['email'].forEach(field => {
-            validationHook.markFieldAsTouched(field)
-          })
-          if (formData.telegramId && formData.telegramId !== '@') {
-            validationHook.markFieldAsTouched('telegramId')
+          ["email"].forEach((field) => {
+            validationHook.markFieldAsTouched(field);
+          });
+          if (formData.telegramId && formData.telegramId !== "@") {
+            validationHook.markFieldAsTouched("telegramId");
           }
         } else if (currentStep === 3) {
-          ['offerId', 'creativeType', 'priority'].forEach(field => {
-            validationHook.markFieldAsTouched(field)
-          })
+          ["offerId", "creativeType", "priority"].forEach((field) => {
+            validationHook.markFieldAsTouched(field);
+          });
         }
       }
     }
-  }
-  
+  };
+
   const handleFormDataChange = (stepData: Partial<typeof formData>) => {
-    setFormData(prev => {
-      const newData = { ...prev, ...stepData }
-      return newData
-    })
-  }
-  
+    setFormData((prev) => {
+      const newData = { ...prev, ...stepData };
+      return newData;
+    });
+  };
+
   const handleSubmit = async () => {
-    if (currentStep !== Constants.totalSteps) return
-    
+    if (currentStep !== Constants.totalSteps) return;
+
     // Validate complete form before submission
-    const completeValidation = validationHook.validateCompleteFormData(formData, files.length > 0, false)
+    const completeValidation = validationHook.validateCompleteFormData(
+      formData,
+      files.length > 0,
+      false
+    );
     if (!completeValidation.isValid) {
       // Mark all fields as touched to show errors
-      Object.keys(completeValidation.errors).forEach(field => {
-        validationHook.markFieldAsTouched(field)
-      })
-      return
+      Object.keys(completeValidation.errors).forEach((field) => {
+        validationHook.markFieldAsTouched(field);
+      });
+      return;
     }
-    
-    setIsSubmitting(true)
+
+    setIsSubmitting(true);
     try {
       // TODO: Backend Developer - Implement complete submission workflow
       //
@@ -197,9 +217,9 @@ const CreativeForm = () => {
       //    - Performance metrics collection
       //
       // Current implementation - Replace with backend logic:
-      const response = await fetch('/api/creative/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch(API_ENDPOINTS.CREATIVE_SAVE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           affiliateId: formData.affiliateId,
           companyName: formData.companyName,
@@ -213,102 +233,112 @@ const CreativeForm = () => {
           subjectLines: formData.subjectLines,
           notes: formData.additionalNotes,
           priority: formData.priority,
-          files: files.map(f => ({
+          files: files.map((f) => ({
             fileName: f.name,
             fileUrl: f.url,
             fileType: f.type,
-            fileSize: f.size
-          }))
-        })
-      })
-      
+            fileSize: f.size,
+          })),
+        }),
+      });
+
       if (response.ok) {
-        const result = await response.json()
-        console.log('Creative saved successfully:', result)
-        
-        // TODO: Backend Developer - Implement redirection logic here
-        // 1. Determine submission type (single/multiple/fromSubjectLines)
-        // 2. Count uploaded files
-        // 3. Store submission data in localStorage as fallback
-        // 4. Redirect to /thankyou with appropriate parameters
-        
-        // Example redirection logic:
-        // const submissionType = files.length > 1 ? 'multiple' : 'single'
-        // const fileCount = files.length
-        // localStorage.setItem('creativeSubmissionType', submissionType)
-        // localStorage.setItem('creativeFileCount', fileCount.toString())
-        // window.location.href = `/thankyou?type=${submissionType}&count=${fileCount}`
-        
+        const result = await response.json();
+        console.log("Creative saved successfully:", result);
+
+        // Implement redirection logic
+        const submissionType = files.length > 1 ? "multiple" : "single";
+        const fileCount = files.length;
+
+        // Store submission data in localStorage as fallback
+        localStorage.setItem("creativeSubmissionType", submissionType);
+        localStorage.setItem("creativeFileCount", fileCount.toString());
+        localStorage.setItem("submissionId", result.submissionId || "");
+        localStorage.setItem("trackingLink", result.trackingLink || "");
+
+        // Redirect to /thankyou with submission ID as slug
+        const submissionId = result.submissionId || "unknown";
+        window.location.href = `/thankyou/${submissionId}?type=${submissionType}&count=${fileCount}&trackingLink=${encodeURIComponent(
+          result.trackingLink || ""
+        )}`;
       } else {
-        throw new Error('Failed to save creative')
+        throw new Error("Failed to save creative");
       }
     } catch (error) {
-      console.error('Submission failed:', error)
-      
+      console.error("Submission failed:", error);
+
       // TODO: Backend Developer - Implement error handling
       // 1. Show user-friendly error messages
       // 2. Log errors for debugging
       // 3. Provide retry options
       // 4. Fallback error handling
-      
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handlePrev = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1)
+      setCurrentStep(currentStep - 1);
       // Clear errors when going back
-      validationHook.clearErrors()
+      validationHook.clearErrors();
     }
-  }
+  };
 
   const getStepContent = () => {
     switch (currentStep) {
       case 1:
         return (
-          <PersonalDetails 
+          <PersonalDetails
             formData={formData}
             onDataChange={handleFormDataChange}
             validationHook={validationHook}
           />
-        )
+        );
       case 2:
         return (
-          <ContactDetails 
+          <ContactDetails
             formData={formData}
             onDataChange={handleFormDataChange}
             validationHook={validationHook}
           />
-        )
+        );
       case 3:
         return (
-          <CreativeDetails 
+          <CreativeDetails
             formData={formData}
             onDataChange={handleFormDataChange}
             onFilesChange={setFiles}
             validationHook={validationHook}
           />
-        )
+        );
       default:
-        return <div>Step not found</div>
+        return <div>Step not found</div>;
     }
-  }
+  };
 
   const getStepLabel = () => {
-    return Constants.currentStep.find(step => step.stepNumber === currentStep)?.stepLabel || ''
-  }
+    return (
+      Constants.currentStep.find((step) => step.stepNumber === currentStep)
+        ?.stepLabel || ""
+    );
+  };
 
   const getButtonText = () => {
     if (currentStep === 1) {
-      return { prev: 'Back', next: Constants.buttonTexts.nextStep2 }
+      return { prev: "Back", next: Constants.buttonTexts.nextStep2 };
     } else if (currentStep === 2) {
-      return { prev: Constants.buttonTexts.prevStep1, next: Constants.buttonTexts.nextStep3 }
+      return {
+        prev: Constants.buttonTexts.prevStep1,
+        next: Constants.buttonTexts.nextStep3,
+      };
     } else {
-      return { prev: Constants.buttonTexts.prevStep2, next: Constants.buttonTexts.submit }
+      return {
+        prev: Constants.buttonTexts.prevStep2,
+        next: Constants.buttonTexts.submit,
+      };
     }
-  }
+  };
 
   // Check if current step is valid for enabling next button
   const isCurrentStepValid = useCallback(() => {
@@ -316,73 +346,85 @@ const CreativeForm = () => {
     switch (currentStep) {
       case 1:
         return Boolean(
-          formData.affiliateId?.trim() && 
-          formData.companyName?.trim() && 
-          formData.firstName?.trim() && 
-          formData.lastName?.trim()
-        )
+          formData.affiliateId?.trim() &&
+            formData.companyName?.trim() &&
+            formData.firstName?.trim() &&
+            formData.lastName?.trim()
+        );
       case 2:
-        return Boolean(formData.email?.trim())
+        return Boolean(formData.email?.trim());
       case 3:
         return Boolean(
-          formData.offerId?.trim() && 
-          formData.creativeType?.trim() && 
-          formData.priority?.trim()
-        )
+          formData.offerId?.trim() &&
+            formData.creativeType?.trim() &&
+            formData.priority?.trim()
+        );
       default:
-        return true
+        return true;
     }
-  }, [currentStep, formData])
+  }, [currentStep, formData]);
 
   return (
-    <div className="flex flex-col items-center min-h-screen py-8 px-4" 
-    style={{
+    <div
+      className="flex flex-col items-center min-h-screen py-8 px-4"
+      style={{
         backgroundImage: `url(${Constants.background})`,
         backgroundColor: "var(--color-primary-50)",
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         backgroundSize: "cover",
-    }}
+      }}
     >
-        <div className="flex flex-col items-center justify-center mb-8">
-            <Image src={Constants.logo} alt='logo' width={100} height={100} className="w-40 md:w-60 h-10 md:h-20"/>
-        </div>
+      <div className="flex flex-col items-center justify-center mb-8">
+        <Image
+          src={Constants.logo}
+          alt="logo"
+          width={100}
+          height={100}
+          className="w-40 md:w-60 h-10 md:h-20"
+        />
+      </div>
 
-        <Card className="w-full max-w-3xl mx-auto shadow-xl">
-            <CardHeader>
-                <CardTitle className="text-2xl sm:text-4xl font-bold text-heading">{Constants.formTitle}</CardTitle>
-                <CardDescription className="text-base sm:text-lg text-body leading-relaxed py-4">{Constants.formDescription}</CardDescription>
-                <div>
-                    <p className="text-base sm:text-lg font-semibold text-primary-500">Step {currentStep} of {Constants.totalSteps} : {getStepLabel()}</p>
-                </div>
-                <Separator className="mt-4" />
-            </CardHeader>
-            <CardContent>
-                {getStepContent()}
-            </CardContent>
-            <CardFooter>
-                <div className="flex flex-col justify-between gap-4 w-full">
-                    {currentStep > 1 && (
-                        <Button 
-                            variant="outline" 
-                            className="w-full" 
-                            onClick={handlePrev}
-                        >
-                            {getButtonText().prev}
-                        </Button>
-                    )}
-                    <Button 
-                        className="w-full" 
-                        onClick={currentStep === Constants.totalSteps ? handleSubmit : handleNext}
-                        disabled={isSubmitting || (currentStep < Constants.totalSteps && !isCurrentStepValid())}
-                    >
-                        {isSubmitting ? 'Submitting...' : getButtonText().next}
-                    </Button>
-                </div>
-            </CardFooter>
-        </Card>
+      <Card className="w-full max-w-3xl mx-auto shadow-xl">
+        <CardHeader>
+          <CardTitle className="text-2xl sm:text-4xl font-bold text-heading">
+            {Constants.formTitle}
+          </CardTitle>
+          <CardDescription className="text-base sm:text-lg text-body leading-relaxed py-4">
+            {Constants.formDescription}
+          </CardDescription>
+          <div>
+            <p className="text-base sm:text-lg font-semibold text-primary-500">
+              Step {currentStep} of {Constants.totalSteps} : {getStepLabel()}
+            </p>
+          </div>
+          <Separator className="mt-4" />
+        </CardHeader>
+        <CardContent>{getStepContent()}</CardContent>
+        <CardFooter>
+          <div className="flex flex-col justify-between gap-4 w-full">
+            {currentStep > 1 && (
+              <Button variant="outline" className="w-full" onClick={handlePrev}>
+                {getButtonText().prev}
+              </Button>
+            )}
+            <Button
+              className="w-full"
+              onClick={
+                currentStep === Constants.totalSteps ? handleSubmit : handleNext
+              }
+              disabled={
+                isSubmitting ||
+                (currentStep < Constants.totalSteps && !isCurrentStepValid())
+              }
+            >
+              {isSubmitting ? "Submitting..." : getButtonText().next}
+            </Button>
+          </div>
+        </CardFooter>
+      </Card>
     </div>
-  )
-}
+  );
+};
 
-export default CreativeForm
+export default CreativeForm;

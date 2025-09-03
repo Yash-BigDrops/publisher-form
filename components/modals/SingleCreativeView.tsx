@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { API_ENDPOINTS } from "@/constants/apiEndpoints";
 import {
   Edit3,
   Eye,
@@ -162,12 +163,19 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       console.log("Creative name:", creative.name);
       console.log("Creative ID:", creative.id);
       
+      // Fix 1: Prefer embeddedHtml if available (from ZIP analyzer)
+      if ((creative as { embeddedHtml?: string }).embeddedHtml && (creative as { embeddedHtml?: string }).embeddedHtml!.length > 0) {
+        console.log("Using embeddedHtml from ZIP analyzer, length:", (creative as { embeddedHtml?: string }).embeddedHtml!.length);
+        setHtmlContent((creative as { embeddedHtml?: string }).embeddedHtml!);
+        return;
+      }
+      
       // First, try to get the file content from our API endpoint with asset processing
       console.log("Trying API endpoint with asset processing...");
       const encodedFileUrl = encodeURIComponent(creative.url);
       
       // Build the API URL with uploadId if available
-      let apiUrl = `/api/get-file-content?fileId=${creative.id}&fileUrl=${encodedFileUrl}&processAssets=true`;
+      let apiUrl = `${API_ENDPOINTS.GET_FILE_CONTENT}?fileId=${creative.id}&fileUrl=${encodedFileUrl}&processAssets=true`;
       if (creative.uploadId) {
         apiUrl += `&uploadId=${encodeURIComponent(creative.uploadId)}`;
       }
@@ -472,6 +480,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
         const result = await proofreadCreative({
           fileType: "html",
           htmlContent,
+          fileUrl: creative.previewUrl, 
           creativeType: creative.type as
             | "email"
             | "display"

@@ -86,6 +86,10 @@ async function init() {
       from_lines TEXT,
       subject_lines TEXT,
       other_request TEXT,
+      affiliate_id TEXT,
+      company_name TEXT,
+      telegram_id TEXT,
+      creative_type TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
@@ -117,6 +121,15 @@ async function init() {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
     );
+  `);
+
+  // Add missing columns to existing submissions table if they don't exist
+  await pool.query(`
+    ALTER TABLE submissions 
+    ADD COLUMN IF NOT EXISTS affiliate_id TEXT,
+    ADD COLUMN IF NOT EXISTS company_name TEXT,
+    ADD COLUMN IF NOT EXISTS telegram_id TEXT,
+    ADD COLUMN IF NOT EXISTS creative_type TEXT;
   `);
 }
 

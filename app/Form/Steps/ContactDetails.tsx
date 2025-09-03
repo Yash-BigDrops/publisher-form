@@ -1,9 +1,10 @@
 import { Constants } from '@/app/Constants/Constants'
+import { API_ENDPOINTS } from '@/constants/apiEndpoints'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ErrorMessage } from '@/components/ui/error-message'
-import React, { useState } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { TELEGRAM_BOT_URL } from '@/constants'
 import { useFormValidation } from '@/hooks/useFormValidation'
 
@@ -26,6 +27,11 @@ const ContactDetails: React.FC<ContactDetailsProps> = ({
   const [isVerifying, setIsVerifying] = useState(false)
   const [isVerified, setIsVerified] = useState(false)
   const [verificationAttempted, setVerificationAttempted] = useState(false)
+  const [verificationError, setVerificationError] = useState<string | null>(null)
+  
+  // Debounce verification attempts
+  const verifyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastVerifyTimeRef = useRef<number>(0)
 
 const contactFields = Constants.formFields.filter(field =>
   ['email', 'telegramId'].includes(field.name)
@@ -118,34 +124,72 @@ const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
   }
 }
 
-const handleVerify = async () => {
+const handleVerify = useCallback(async () => {
   if (!formData.telegramId || formData.telegramId === '@') return
+  
+  // Debounce verification attempts (prevent rapid clicking)
+  const now = Date.now()
+  const timeSinceLastVerify = now - lastVerifyTimeRef.current
+  const minInterval = 2000 // 2 seconds between attempts
+  
+  if (timeSinceLastVerify < minInterval) {
+    setVerificationError(`Please wait ${Math.ceil((minInterval - timeSinceLastVerify) / 1000)} seconds before trying again`)
+    return
+  }
+  
+  // Clear any existing timeout
+  if (verifyTimeoutRef.current) {
+    clearTimeout(verifyTimeoutRef.current)
+  }
   
   setIsVerifying(true)
   setVerificationAttempted(true)
+  setVerificationError(null)
+  lastVerifyTimeRef.current = now
   
   try {
-    await fetch('/api/telegram/poll', { method: 'POST' })
+    // First, poll for any pending updates
+    const pollResponse = await fetch(API_ENDPOINTS.TELEGRAM_POLL, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (!pollResponse.ok) {
+      throw new Error('Failed to poll for updates')
+    }
 
-    const res = await fetch('/api/telegram/verify', {
+    // Then verify the Telegram ID
+    const verifyResponse = await fetch(API_ENDPOINTS.TELEGRAM_VERIFY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ telegramId: formData.telegramId }),
     })
     
-    if (!res.ok) {
-      throw new Error('Verification request failed')
+    if (!verifyResponse.ok) {
+      const errorText = await verifyResponse.text()
+      throw new Error(`Verification failed: ${verifyResponse.status} ${errorText}`)
     }
     
-    const data = await res.json()
-    setIsVerified(Boolean(data.verified))
+    const data = await verifyResponse.json()
+    
+    // Ensure we get the expected response shape
+    if (typeof data.verified !== 'boolean') {
+      throw new Error('Invalid response format from verification endpoint')
+    }
+    
+    setIsVerified(data.verified)
+    
+    if (!data.verified) {
+      setVerificationError('Telegram ID not found. Make sure you sent /start to the bot first.')
+    }
   } catch (err) {
     console.error('Verification failed:', err)
     setIsVerified(false)
+    setVerificationError(err instanceof Error ? err.message : 'Verification failed. Please try again.')
   } finally {
     setIsVerifying(false)
   }
-}
+}, [formData.telegramId])
 
 const getFieldError = (fieldName: string): string => {
   if (!validationHook) return ''
@@ -235,17 +279,24 @@ const isFieldTouched = (fieldName: string): boolean => {
               </p>
             )}
             
+            {/* Show verification error */}
+            {field.name === 'telegramId' && verificationError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{verificationError}</p>
+              </div>
+            )}
+            
             {/* Show verification steps box for Telegram field when verification was attempted and failed */}
-            {field.name === 'telegramId' && verificationAttempted && !isVerifying && !isVerified && (
-              <div className="mt-3 p-3 bg-warning-light border border-warning-medium rounded-md">
-                <h4 className="text-sm font-medium text-warning-medium mb-2">📋 Steps to Verify Your Telegram ID:</h4>
-                <ol className="text-xs text-warning-medium space-y-1 list-decimal list-inside mb-3">
+            {field.name === 'telegramId' && verificationAttempted && !isVerifying && !isVerified && !verificationError && (
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <h4 className="text-sm font-medium text-yellow-800 mb-2">📋 Steps to Verify Your Telegram ID:</h4>
+                <ol className="text-xs text-yellow-700 space-y-1 list-decimal list-inside mb-3">
                   <li>Click on Start Bot Button</li>
                   <li>Send /start to the bot</li>
                   <li>Come back and Verify again</li>
                 </ol>
                 <Button asChild variant="outline" size="xs"
-                  className="text-xs w-max border-warning-medium text-warning-medium hover:bg-warning-medium hover:text-white">
+                  className="text-xs w-max border-yellow-300 text-yellow-700 hover:bg-yellow-200">
                   <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">Start Bot</a>
                 </Button>
               </div>

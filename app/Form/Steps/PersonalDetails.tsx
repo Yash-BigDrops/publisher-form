@@ -59,11 +59,7 @@ const PersonalDetails: React.FC<PersonalDetailsProps> = ({
     const { name } = e.currentTarget
     
     // Prevent number keys from being pressed for firstName and lastName fields
-    if ((name === 'firstName' || name === 'lastName') && 
-        (e.key >= '0' && e.key <= '9' || e.key === 'Numpad0' || e.key === 'Numpad1' || 
-         e.key === 'Numpad2' || e.key === 'Numpad3' || e.key === 'Numpad4' || 
-         e.key === 'Numpad5' || e.key === 'Numpad6' || e.key === 'Numpad7' || 
-         e.key === 'Numpad8' || e.key === 'Numpad9')) {
+    if ((name === 'firstName' || name === 'lastName') && /\d/.test(e.key)) {
       e.preventDefault()
       return
     }

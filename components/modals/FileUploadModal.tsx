@@ -13,6 +13,7 @@ import {
   PencilLine,
 } from "lucide-react";
 import { useFileUpload } from "@/hooks";
+import { API_ENDPOINTS } from "@/constants/apiEndpoints";
 import { FILE_UPLOAD_CONFIG, formatFileSize } from "@/constants";
 import { UploadAnalysis, AnalyzedItem } from "@/types/upload";
 
@@ -118,7 +119,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch("/api/analyze-zip", {
+    const response = await fetch(API_ENDPOINTS.ANALYZE_ZIP, {
       method: "POST",
       body: formData,
     });

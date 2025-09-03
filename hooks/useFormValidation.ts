@@ -200,23 +200,59 @@ export const useFormValidation = (initialFormData: FormData) => {
     setHasFromSubjectLines(false)
   }, [])
 
+  // Additional methods expected by components
+  const hasErrors = Object.keys(validationState.errors).some(key => validationState.errors[key])
+  
+  // Validate form method (used by some components)
+  const validateForm = useCallback((data: Record<string, string>) => {
+    const formDataObj: FormData = {
+      affiliateId: data.affiliateId || '',
+      companyName: data.companyName || '',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      email: data.email || '',
+      telegramId: data.telegramId || '',
+      offerId: data.offerId || '',
+      creativeType: data.creativeType || '',
+      additionalNotes: data.additionalNotes || '',
+      fromLines: data.fromLines || '',
+      subjectLines: data.subjectLines || '',
+      priority: data.priority || ''
+    }
+    const result = validateCompleteFormData(formDataObj, hasUploadedFiles, hasFromSubjectLines)
+    return result.isValid
+  }, [validateCompleteFormData, hasUploadedFiles, hasFromSubjectLines])
+
   return {
-    validationState,
-    updateFormData,
-    markFieldAsTouched,
-    handleFieldBlur,
-    handleFieldChange,
+    // Core validation state
+    errors: validationState.errors,
+    hasErrors,
+    isValid: validationState.isValid,
+    
+    // Core methods
     validateField,
+    validateForm,
+    clearErrors,
+    
+    // Methods used by step components
+    handleFieldChange,
+    handleFieldBlur,
+    getFieldErrorMessage,
+    hasFieldError,
+    isFieldTouched,
+    markFieldAsTouched,
+    
+    // Step validation methods used by CreativeForm
     validatePersonalDetailsStep,
     validateContactDetailsStep,
     validateCreativeDetailsStep,
     validateCompleteFormData,
+    
+    // Additional methods (for backward compatibility)
+    validationState,
+    updateFormData,
     validateAllFields,
-    clearErrors,
     clearFieldError,
-    hasFieldError,
-    getFieldErrorMessage,
-    isFieldTouched,
     isFormValid,
     updateFileUploadState,
     updateFromSubjectLinesState,

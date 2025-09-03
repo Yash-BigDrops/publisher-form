@@ -31,7 +31,7 @@ function getFilePriority(fileName: string, mime: string): number {
   if (mime.startsWith('image/')) return 8;
   if (mime === 'application/pdf') return 6;
   if (mime === 'text/plain' || fileName.endsWith('.txt')) return 2;
-  return 1;
+  return 1; // Default priority for other file types
 }
 
 export async function extractEncryptedZipBuffer(zipBuf: Buffer, password: string, opts: PwExtractOptions) {
@@ -61,6 +61,7 @@ export async function extractEncryptedZipBuffer(zipBuf: Buffer, password: string
     depth: number;
     encrypted: boolean;
     priority: number;
+    originalPath?: string;
   }> = [];
   const skipped: Array<{
     path?: string;
@@ -113,13 +114,17 @@ export async function extractEncryptedZipBuffer(zipBuf: Buffer, password: string
       hash: sha256(data),
       depth: 0,
       encrypted: true,
-      priority
+      priority,
+      originalPath: name // Preserve the original ZIP path
     });
   }
 
   // Sort by priority if HTML prioritization is enabled
   if (opts.prioritizeHtml) {
-    extracted.sort((a, b) => b.priority - a.priority);
+    console.log(`[ZIP SORT] Sorting ${extracted.length} encrypted files by priority`);
+    console.log(`[ZIP SORT] Before sorting:`, extracted.map(f => ({ name: f.fileName, priority: f.priority, type: f.fileType })));
+    extracted.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+    console.log(`[ZIP SORT] After sorting:`, extracted.map(f => ({ name: f.fileName, priority: f.priority, type: f.fileType })));
   }
 
   return { extracted, skipped, usedLibrary: true };

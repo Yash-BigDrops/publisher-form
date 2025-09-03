@@ -182,5 +182,31 @@ export const Constants = {
     priorityLevels: [
         { name: "High", value: "High" },
         { name: "Medium", value: "Medium" },
-    ]
+    ],
+
+    // ZIP Processing Constants
+    zipProcessing: {
+        MAX_ZIP_SIZE: 150 * 1024 * 1024, // 150MB
+        LARGE_ZIP_WARNING_THRESHOLD: 100 * 1024 * 1024, // 100MB - warn but allow
+        MAX_FILES_PER_ZIP: 100,
+        MAX_ZIP_DEPTH: 5,
+        ALLOWED_ZIP_TYPES: [
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream'
+        ],
+        ALLOWED_EXTENSIONS: [
+            '.html', '.htm', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg',
+            '.css', '.js', '.txt', '.pdf', '.doc', '.docx'
+        ],
+        SCAN_VIRUSES: true,
+        VALIDATE_FILE_TYPES: true,
+        CHECK_FILE_HEADERS: true,
+        // HTML entry file preferences
+        HTML_ENTRY_PREFERENCES: ['index.html', 'index.htm', 'main.html', 'home.html'],
+        // Image file extensions
+        IMAGE_EXTENSIONS: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'],
+        // HTML file extensions  
+        HTML_EXTENSIONS: ['.html', '.htm']
+    }
 } 

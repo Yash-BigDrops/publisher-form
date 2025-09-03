@@ -178,6 +178,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
+    filename: saved.fileName,
     file: {
       fileId: saved.id,
       fileName: saved.fileName,

@@ -23,14 +23,33 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const SYSTEM = `
-You are a precise creative proofreader and optimizer specializing in email and marketing content.
+You are an expert editor and proofreader specializing in marketing emails with more than 10 years of experience.
 Return ONLY JSON with keys: issues (array), suggestions (array), qualityScore (object).
 
-Focus on:
-- Grammar, spelling, and punctuation in the actual text content
-- Readability and clarity of the message
-- Conversion optimization (CTAs, compelling language, urgency)
-- Brand alignment and tone consistency
+Carefully review the email creative and check the following:
+
+Grammar & Spelling:
+- Correct all grammatical mistakes, spelling errors, and awkward phrasing
+- Ensure subject-verb agreement, consistent tense usage, and correct word forms
+- Fix incorrect punctuation (commas, apostrophes, quotation marks, colons, semicolons, etc.)
+- Do not add any words that may end up in spam (Free, Act Now, 100% guarantee, etc)
+- Important: Do not confuse a normal dash (-) with an em dash (—). Use the em dash only when appropriate (for emphasis, interruption, or breaks in thought)
+- Ensure proper spacing before/after punctuation
+
+Clarity & Readability:
+- Simplify complex sentences while keeping a persuasive, professional tone
+- Improve flow and remove redundancy
+- Ensure the message is easy to read on both desktop and mobile
+
+Tone & Style:
+- Keep the style engaging, persuasive, and aligned with marketing copy
+- Maintain brand professionalism (not too casual, not too stiff)
+- Ensure consistency in voice (e.g., "we" vs. "our team")
+
+Suggestions:
+- Suggest alternate word choices if they improve impact
+- Recommend formatting improvements for scannability (shorter sentences, line breaks, bullet points if needed)
+- Highlight if the subject line or CTA could be stronger
 
 Ignore HTML markup, focus only on the human-readable text content.
 Be concise, practical, and provide specific, actionable feedback.
@@ -190,27 +209,37 @@ export async function POST(req: Request) {
     let out: Resp | null = null;
 
     if (payload.fileType === "html") {
-      const textOnly = (payload.htmlContent || "")
-        // Remove script and style tags completely
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        // Remove HTML comments
-        .replace(/<!--[\s\S]*?-->/g, "")
-        // Replace common HTML tags with appropriate spacing to preserve sentence structure
-        .replace(/<\/?(?:p|div|h[1-6]|section|article|main|header|footer|nav|aside|ul|ol|li|table|tr|td|th|thead|tbody|caption|colgroup|col|blockquote|pre|address|fieldset|legend|form|label|input|textarea|select|option|button|img|a|span|strong|em|b|i|u|mark|small|del|ins|sub|sup|code|kbd|samp|var|cite|dfn|abbr|acronym|time|data|meter|progress|details|summary|dialog|menu|menuitem|wbr|br|hr)[^>]*>/gi, " ")
-        // Remove any remaining HTML tags
-        .replace(/<[^>]+>/g, "")
-        // Clean up whitespace while preserving sentence structure
-        .replace(/\s+/g, " ")
-        .replace(/\s*([.!?])\s*/g, "$1 ")
-        .replace(/\s*([,;:])\s*/g, "$1 ")
-        .trim()
-        .slice(0, 15000); // safety
+      // Check if we have a preview URL for HTML content (complete visual preview)
+      if (payload.fileUrl && payload.fileUrl.includes('preview_')) {
+        console.log("Using HTML preview image for proofreading:", payload.fileUrl);
+        // Use vision model to analyze the complete HTML preview image
+        const imageSource = await normalizeImageForOpenAI(payload.fileUrl, req);
+        const context = `${ctx}\n\nHTML PREVIEW IMAGE: This is a visual preview of the complete HTML creative. Analyze the text content, layout, and visual elements as they appear to users.`;
+        out = coerceResp(await callOpenAIVisionJSON(imageSource, context));
+      } else {
+        // Fallback to text extraction for HTML without preview
+        const textOnly = (payload.htmlContent || "")
+          // Remove script and style tags completely
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          // Remove HTML comments
+          .replace(/<!--[\s\S]*?-->/g, "")
+          // Replace common HTML tags with appropriate spacing to preserve sentence structure
+          .replace(/<\/?(?:p|div|h[1-6]|section|article|main|header|footer|nav|aside|ul|ol|li|table|tr|td|th|thead|tbody|caption|colgroup|col|blockquote|pre|address|fieldset|legend|form|label|input|textarea|select|option|button|img|a|span|strong|em|b|i|u|mark|small|del|ins|sub|sup|code|kbd|samp|var|cite|dfn|abbr|acronym|time|data|meter|progress|details|summary|dialog|menu|menuitem|wbr|br|hr)[^>]*>/gi, " ")
+          // Remove any remaining HTML tags
+          .replace(/<[^>]+>/g, "")
+          // Clean up whitespace while preserving sentence structure
+          .replace(/\s+/g, " ")
+          .replace(/\s*([.!?])\s*/g, "$1 ")
+          .replace(/\s*([,;:])\s*/g, "$1 ")
+          .trim()
+          .slice(0, 15000); // safety
 
-      console.log("Extracted text for proofreading:", textOnly.substring(0, 200) + "...");
+        console.log("Extracted text for proofreading:", textOnly.substring(0, 200) + "...");
 
-      const prompt = `${ctx}\n\nEXTRACTED TEXT CONTENT:\n${textOnly}\n\nAnalyze this text for grammar, readability, conversion optimization, and brand alignment. Focus on the actual content, not HTML markup. Return JSON only.`;
-      out = coerceResp(await callAnthropicJSON(prompt)) || coerceResp(await callOpenAIJSON(prompt));
+        const prompt = `${ctx}\n\nEXTRACTED TEXT CONTENT:\n${textOnly}\n\nAnalyze this text for grammar, readability, conversion optimization, and brand alignment. Focus on the actual content, not HTML markup. Return JSON only.`;
+        out = coerceResp(await callAnthropicJSON(prompt)) || coerceResp(await callOpenAIJSON(prompt));
+      }
     } else if (payload.fileType === "image") {
       if (!payload.fileUrl) {
         return NextResponse.json({ success: false, error: "fileUrl required for image" }, { status: 400 });

@@ -1,5 +1,7 @@
+import { API_ENDPOINTS } from '@/constants/apiEndpoints';
+
 export async function saveCreative(body: Record<string, unknown>) {
-  const r = await fetch("/api/creative/save", {
+  const r = await fetch(API_ENDPOINTS.CREATIVE_SAVE, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -9,7 +11,7 @@ export async function saveCreative(body: Record<string, unknown>) {
 }
 
 export async function deleteCreativeApi(arg: { fileUrl?: string; creativeId?: string }) {
-  const r = await fetch("/api/creative/delete", {
+  const r = await fetch(API_ENDPOINTS.CREATIVE_DELETE, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(arg),
@@ -19,7 +21,7 @@ export async function deleteCreativeApi(arg: { fileUrl?: string; creativeId?: st
 }
 
 export async function saveHtml(arg: { fileUrl: string; html: string; newFileName?: string }) {
-  const r = await fetch("/api/creative/save-html", {
+  const r = await fetch(API_ENDPOINTS.CREATIVE_SAVE_HTML, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(arg),
@@ -29,7 +31,7 @@ export async function saveHtml(arg: { fileUrl: string; html: string; newFileName
 }
 
 export async function renameCreative(arg: { creativeId?: string; fileUrl?: string; newName: string }) {
-  const r = await fetch("/api/creative/rename", {
+  const r = await fetch(API_ENDPOINTS.CREATIVE_RENAME, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(arg),
@@ -46,7 +48,7 @@ export async function saveCreativeMetadata(arg: {
   htmlContent?: string;
   metadata?: Record<string, unknown>;
 }) {
-  const r = await fetch("/api/creative/save-metadata", {
+  const r = await fetch(API_ENDPOINTS.CREATIVE_SAVE_METADATA, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(arg),
@@ -56,7 +58,7 @@ export async function saveCreativeMetadata(arg: {
 }
 
 export async function getCreativeMetadata(creativeId: string) {
-  const r = await fetch(`/api/creative/get-metadata?creativeId=${creativeId}`, {
+  const r = await fetch(`${API_ENDPOINTS.CREATIVE_GET_METADATA}?creativeId=${creativeId}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
   });

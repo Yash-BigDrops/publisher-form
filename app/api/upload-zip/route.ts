@@ -6,6 +6,7 @@ import { extractEncryptedZipBuffer } from '@/lib/zipPassword';
 import { sendToLoggingService } from '@/lib/logging';
 import { rateLimit } from '@/lib/rateLimit';
 import { progressStart, progressUpdate, progressDone, progressError } from '@/lib/progressStore';
+import { createUploadAssetIndex, storeUploadAssetIndex } from '@/lib/uploadAssetIndex';
 
 const ALLOW = new Set([
   'image/png','image/jpeg','image/gif','image/webp','image/svg+xml',
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   }
 
   const form = await req.formData();
-  const file = form.get('file') as File | null;
+  const file = (form.get('file') || form.get('zip')) as File | null;
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
 
   const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -72,6 +73,9 @@ export async function POST(req: Request) {
       hash: string;
       depth: number;
       encrypted?: boolean;
+      priority?: number;
+      originalPath?: string;
+      previewUrl?: string;
     }> = [];
     const skipped: Array<{
       path?: string;
@@ -95,7 +99,7 @@ export async function POST(req: Request) {
           allow: ALLOW, 
           enableVirusScan: ENABLE_SCAN, 
           perFileMaxBytes: PER_FILE_MAX,
-          prioritizeHtml: true // Enable HTML prioritization for encrypted files too
+          prioritizeHtml: true 
         });
         extracted.push(...dec.extracted);
         skipped.push(...dec.skipped);
@@ -113,7 +117,7 @@ export async function POST(req: Request) {
       perFileMaxBytes: PER_FILE_MAX,
       enableVirusScan: ENABLE_SCAN,
       dedup: true,
-      prioritizeHtml: true, // Enable HTML prioritization over text files
+      prioritizeHtml: true, 
       
       onEntry: ({ path, index, total }) => {
         if (index % 5 === 0) progressUpdate(uploadId, Math.min(90, Math.round(15 + (index / Math.max(1, total)) * 70)), `processing: ${path}`);
@@ -125,6 +129,16 @@ export async function POST(req: Request) {
     skipped.push(...safe.skipped);
 
     progressUpdate(uploadId, 97, 'finalizing');
+
+    const assetIndex = createUploadAssetIndex(extracted.map(f => ({
+      fileId: f.fileId,
+      fileName: f.fileName,
+      fileSize: f.fileSize,
+      fileType: f.fileType,
+      originalPath: (f as { originalPath?: string }).originalPath || f.fileName 
+    })));
+    storeUploadAssetIndex(uploadId, assetIndex);
+    
     await sendToLoggingService({
       event: 'zip-complete',
       uploadId, extractedCount: extracted.length, skippedCount: skipped.length, totals: compression
@@ -133,6 +147,7 @@ export async function POST(req: Request) {
     progressDone(uploadId, { extractedCount: extracted.length, skippedCount: skipped.length });
     return NextResponse.json({
       uploadId, preview, compression,
+      files: extracted.map(f => f.fileName),
       extractedFiles: extracted, skipped, totalBytes: safe.totalBytes
     });
   } catch (e) {

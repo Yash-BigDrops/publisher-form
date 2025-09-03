@@ -1,6 +1,7 @@
 "use client"
 
 import { Constants } from '@/app/Constants/Constants'
+import { API_ENDPOINTS } from '@/constants/apiEndpoints'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -24,12 +25,12 @@ type UploadedFileMeta = {
   previewUrl?: string;
   assetCount?: number;
   hasAssets?: boolean;
-  uploadId?: string; // Added for asset mapping
+  uploadId?: string; 
+  embeddedHtml?: string; 
 };
 
 type UploadError = { scope: 'single' | 'zip'; message: string };
 
-// API response types for better type safety
 interface SingleUploadResponse {
   success: boolean;
   file?: {
@@ -57,14 +58,15 @@ interface SingleUploadResponse {
 }
 
 interface ZipUploadResponse {
-  uploadId: string; // Add uploadId to track ZIP uploads
+  uploadId: string; 
   extractedFiles: Array<{
     fileId: string;
     fileName: string;
     fileUrl: string;
     fileSize: number;
     fileType?: string;
-    previewUrl?: string; // Backend populates this for image files
+    previewUrl?: string; 
+    embeddedHtml?: string; 
   }>;
 }
 
@@ -97,7 +99,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
     let isMounted = true;
     (async () => {
       try {
-        const res = await fetch('/api/everflow/offers', { cache: 'no-store' });
+        const res = await fetch(API_ENDPOINTS.EVERFLOW_OFFERS, { cache: 'no-store' });
         if (!res.ok) throw new Error(await res.text());
         const offerIds = await res.json();
         if (!isMounted) return;
@@ -124,19 +126,15 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   const [hasFromSubjectLines, setHasFromSubjectLines] = useState(false)
   const [hasUploadedFiles, setHasUploadedFiles] = useState(false)
   
-  // Single Creative View Modal state
   const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] = useState(false)
   const [selectedCreative, setSelectedCreative] = useState<UploadedFileMeta | null>(null)
   
-  // Multiple Creative View Modal state
   const [isMultipleCreativeViewOpen, setIsMultipleCreativeViewOpen] = useState(false)
   const [selectedCreatives, setSelectedCreatives] = useState<UploadedFileMeta[]>([])
   const [zipFileName, setZipFileName] = useState<string>('')
   
-  // Store ZIP filename for uploaded files summary (persists after modal close)
   const [uploadedZipFileName, setUploadedZipFileName] = useState<string>('')
   
-  // File management state
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFileMeta[]>([])
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState<number | null>(null)
@@ -144,27 +142,22 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   
   useEffect(() => {
     onFilesChange?.(uploadedFiles);
-    // Ensure hasUploadedFiles stays in sync with uploadedFiles array
     setHasUploadedFiles(uploadedFiles.length > 0);
   }, [uploadedFiles, onFilesChange]);
 
-  // Cleanup function for timeouts
   useEffect(() => {
     return () => {
-      // Cleanup any pending timeouts when component unmounts
-      // This prevents memory leaks from setTimeout calls
+
     };
   }, []);
 
   const handleSelectChange = (fieldName: string, value: string) => {
     onDataChange({ [fieldName]: value })
     
-    // Clear search term when offer is selected
     if (fieldName === 'offerId') {
       setOfferSearchTerm('')
     }
     
-    // Trigger validation if validation hook is provided
     if (validationHook) {
       validationHook.handleFieldChange(fieldName, value, true)
     }
@@ -174,7 +167,6 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
     const { name, value } = e.target
     onDataChange({ [name]: value })
     
-    // Trigger validation if validation hook is provided
     if (validationHook) {
       validationHook.handleFieldChange(name, value, true)
     }
@@ -184,7 +176,6 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   const addFiles = useCallback((files: UploadedFileMeta[]) => {
     setUploadedFiles(prev => {
       const updated = [...prev, ...files]
-      // Update hasUploadedFiles based on the new array length
       setHasUploadedFiles(updated.length > 0)
       return updated
     })
@@ -193,7 +184,6 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   const removeFile = useCallback((id: string) => {
     setUploadedFiles(prev => {
       const updated = prev.filter(f => f.id !== id)
-      // Update hasUploadedFiles based on the new array length
       setHasUploadedFiles(updated.length > 0)
       return updated
     })
@@ -209,26 +199,21 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
 
   const resetFeedback = () => { setLastError(null); setProgress(null) }
 
-  // Open Single Creative View Modal
   const openSingleCreativeView = useCallback((creative: UploadedFileMeta) => {
     setSelectedCreative(creative)
     setIsSingleCreativeViewOpen(true)
   }, [])
 
-  // Open Multiple Creative View Modal
   const openMultipleCreativeView = useCallback((creatives: UploadedFileMeta[], fileName?: string) => {
     setSelectedCreatives(creatives)
     setZipFileName(fileName || '')
-    setUploadedZipFileName(fileName || '') // Persist ZIP filename for summary
+    setUploadedZipFileName(fileName || '') 
     setIsMultipleCreativeViewOpen(true)
   }, [])
 
-  // Handle removing a creative from the multiple view
   const handleRemoveCreative = useCallback((creativeId: string) => {
-    // Remove from selectedCreatives
     setSelectedCreatives(prev => prev.filter(creative => creative.id !== creativeId))
-    
-    // Remove from uploadedFiles
+  
     setUploadedFiles(prev => {
       const updated = prev.filter(file => file.id !== creativeId)
       setHasUploadedFiles(updated.length > 0)
@@ -277,7 +262,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
         fd.append('smartDetection', 'true');
       }
       
-      const r = await fetch('/api/upload', { method: 'POST', body: fd });
+      const r = await fetch(API_ENDPOINTS.UPLOAD, { method: 'POST', body: fd });
       if (!r.ok) throw new Error(await r.text());
       const data: SingleUploadResponse = await r.json();
 
@@ -362,7 +347,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
 
       const fd = new FormData();
       fd.append('file', file);
-      const r = await fetch('/api/upload-zip', { method: 'POST', body: fd });
+      const r = await fetch(API_ENDPOINTS.UPLOAD_ZIP, { method: 'POST', body: fd });
       if (!r.ok) throw new Error(await r.text());
       const data: ZipUploadResponse = await r.json();
 
@@ -382,9 +367,12 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
           html: /\.html?$/i.test(f.fileName),
           // Backend implements thumbnail generation, f.previewUrl contains the thumbnail URL
           previewUrl: f.previewUrl || (isImageFile ? f.fileUrl : undefined),
-          uploadId: data.uploadId // Store uploadId for asset mapping
+          uploadId: data.uploadId, // Store uploadId for asset mapping
+          embeddedHtml: f.embeddedHtml // Pass through embedded HTML
         };
       });
+
+
 
       addFiles(mapped);
       setProgress(100);

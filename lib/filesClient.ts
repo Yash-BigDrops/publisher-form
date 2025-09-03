@@ -1,11 +1,13 @@
+import { API_ENDPOINTS, buildFileUrl } from '@/constants/apiEndpoints';
+
 export async function deleteFileById(id: string) {
-  const r = await fetch(`/api/files/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const r = await fetch(buildFileUrl(id), { method: 'DELETE' });
   if (!r.ok) throw new Error('delete failed');
   return r.json();
 }
 
 export async function bulkDeleteByIds(ids: string[]) {
-  const r = await fetch('/api/files/bulk-delete', {
+  const r = await fetch(API_ENDPOINTS.FILES_BULK_DELETE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids }),

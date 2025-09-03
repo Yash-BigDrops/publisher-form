@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from '@/constants/apiEndpoints';
+
 export async function generateEmailContent(opts: {
   creativeType?: string;
   audience?: string;
@@ -9,7 +11,7 @@ export async function generateEmailContent(opts: {
   maxFrom?: number;
   maxSubject?: number;
 }) {
-  const r = await fetch("/api/generate-email-content", {
+  const r = await fetch(API_ENDPOINTS.GENERATE_EMAIL_CONTENT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(opts),

@@ -22,7 +22,8 @@ interface MultipleCreativeViewProps {
     type: string;
     previewUrl?: string;
     html?: boolean;
-    uploadId?: string; // Add uploadId for asset mapping
+    uploadId?: string; 
+    embeddedHtml?: string; 
   }>;
   zipFileName?: string;
   onRemoveCreative?: (creativeId: string) => void;
@@ -42,35 +43,28 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
   const [isImagePreviewFullscreen, setIsImagePreviewFullscreen] =
     useState(false);
 
-  // SingleCreativeView state
   const [isSingleCreativeViewOpen, setIsSingleCreativeViewOpen] =
     useState(false);
   const [selectedCreative, setSelectedCreative] = useState<
     MultipleCreativeViewProps["creatives"][0] | null
   >(null);
 
-  // HTML content state for editing
   const [htmlContent, setHtmlContent] = useState("");
 
-  // CRUD operations state
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>("");
 
-  // Current creative
   const currentCreative = creatives[currentCreativeIndex];
 
-  // Prevent background scrolling when modal is open
   React.useEffect(() => {
     if (isOpen) {
-      // Store current scroll position
       const scrollY = window.scrollY;
       document.body.style.position = "fixed";
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
     } else {
-      // Restore scroll position and body styles
       const scrollY = document.body.style.top;
       document.body.style.position = "";
       document.body.style.top = "";
@@ -81,7 +75,6 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
       }
     }
 
-    // Cleanup function to restore scrolling when component unmounts
     return () => {
       const scrollY = document.body.style.top;
       document.body.style.position = "";
@@ -94,7 +87,6 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
     };
   }, [isOpen]);
 
-  // Load HTML content when creative changes for HTML creatives
   React.useEffect(() => {
     if (
       isOpen &&
@@ -105,22 +97,28 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
       console.log("Loading HTML content for HTML creative...");
       fetchHtmlContent();
     }
-  }, [isOpen, currentCreative]); // fetchHtmlContent is defined inline and doesn't need to be a dependency
+  }, [isOpen, currentCreative]); 
 
-  // Function to fetch HTML content from uploaded file
   const fetchHtmlContent = async () => {
     if (!currentCreative) return;
 
     try {
       console.log("Fetching HTML content from:", currentCreative.url);
 
-      // First, try to get the file content from our API endpoint
+      if ((currentCreative as { embeddedHtml?: string }).embeddedHtml && (currentCreative as { embeddedHtml?: string }).embeddedHtml!.length > 0) {
+        console.log("Using embeddedHtml from ZIP analyzer, length:", (currentCreative as { embeddedHtml?: string }).embeddedHtml!.length);
+        setHtmlContent((currentCreative as { embeddedHtml?: string }).embeddedHtml!);
+        return;
+      }
+
       const encodedFileUrl = encodeURIComponent(currentCreative.url);
       
-      // Build the API URL with uploadId if available
       let apiUrl = `/api/get-file-content?fileId=${currentCreative.id}&fileUrl=${encodedFileUrl}&processAssets=true`;
       if (currentCreative.uploadId) {
         apiUrl += `&uploadId=${encodeURIComponent(currentCreative.uploadId)}`;
+      }
+      if ((currentCreative as { embeddedHtml?: string }).embeddedHtml) {
+        apiUrl += `&embeddedHtml=${encodeURIComponent((currentCreative as { embeddedHtml?: string }).embeddedHtml!)}`;
       }
       
       const apiResponse = await fetch(apiUrl, {
@@ -140,7 +138,6 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         console.log("API response not OK, status:", apiResponse.status);
       }
 
-      // If API fails, try to fetch directly from the uploaded URL
       console.log("API failed, trying direct URL fetch...");
       const directResponse = await fetch(currentCreative.url, {
         method: "GET",
@@ -156,7 +153,6 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         console.log("HTML content loaded directly, length:", htmlText.length);
         setHtmlContent(htmlText);
       } else {
-        // Final fallback
         console.log("All methods failed, using fallback content");
         setHtmlContent(`<!-- HTML Content Loading Failed -->
 <!DOCTYPE html>
@@ -211,17 +207,14 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
     console.log("Saving HTML changes for creative:", currentCreative?.id);
   };
 
-  // HTML Editor fullscreen toggle
   const toggleHtmlEditorFullscreen = () => {
     setIsHtmlEditorFullscreen(!isHtmlEditorFullscreen);
   };
 
-  // Image Preview fullscreen toggle
   const toggleImagePreviewFullscreen = () => {
     setIsImagePreviewFullscreen(!isImagePreviewFullscreen);
   };
 
-  // SingleCreativeView handlers
   const openSingleCreativeView = (
     creative: MultipleCreativeViewProps["creatives"][0]
   ) => {
@@ -238,21 +231,17 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
     fileId: string,
     newFileName: string
   ) => {
-    // Update the creative in the creatives array
     const updatedCreatives = creatives.map((creative) =>
       creative.id === fileId ? { ...creative, name: newFileName } : creative
     );
 
-    // Update selected creative if it's the one being edited
     if (selectedCreative?.id === fileId) {
       setSelectedCreative({ ...selectedCreative, name: newFileName });
     }
 
-    // Propagate the change to parent component
     onFileNameChange?.(fileId, newFileName);
   };
 
-  // CRUD operations
   const handleDeleteCreative = async (creative: (typeof creatives)[0]) => {
     if (!confirm(`Are you sure you want to delete "${creative.name}"?`)) {
       return;
@@ -306,10 +295,8 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         newName: newName.trim(),
       });
 
-      // Update local state
       onFileNameChange?.(creative.id, newName.trim());
 
-      // Update selected creative if it's the one being renamed
       if (selectedCreative?.id === creative.id) {
         setSelectedCreative({ ...selectedCreative, name: newName.trim() });
       }
@@ -358,7 +345,8 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
         <div className="flex-1 overflow-hidden">
           <div className="h-full p-3 sm:p-4 lg:p-6 bg-gray-50 overflow-y-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-              {creatives.map((creative) => {
+              {creatives.map((creative, index) => {
+                
                 const fileType = getFileType(creative.name);
                 const isImage = fileType === "image";
                 const isHtml = fileType === "html";
