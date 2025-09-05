@@ -75,7 +75,24 @@ export const validateFileSize = (file: File, maxSizeMB: number): boolean => {
 // Form validation helpers
 export const getFieldError = (fieldName: string, value: string, isRequired: boolean = true): string => {
   if (isRequired && !validateRequired(value)) {
-    return `${fieldName} is required`
+    // Map field names to user-friendly labels
+    const fieldLabels: Record<string, string> = {
+      'affiliateId': 'Affiliate ID',
+      'companyName': 'Company Name',
+      'firstName': 'First Name',
+      'lastName': 'Last Name',
+      'email': 'Email',
+      'telegramId': 'Telegram ID',
+      'offerId': 'Offer ID',
+      'creativeType': 'Creative Type',
+      'priority': 'Priority',
+      'additionalNotes': 'Additional Notes',
+      'fromLines': 'From Lines',
+      'subjectLines': 'Subject Lines'
+    }
+    
+    const label = fieldLabels[fieldName] || fieldName
+    return `${label} is required`
   }
   
   if (fieldName === 'email' && value && !validateEmail(value)) {

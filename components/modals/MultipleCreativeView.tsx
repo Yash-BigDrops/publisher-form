@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileText, Image, File, Minimize2, FileArchive } from "lucide-react";
 import { formatFileSize, getFileType } from "@/constants";
 import SingleCreativeView from "./SingleCreativeView";
-import { renameCreative } from "@/lib/creativeClient";
 import { ImagePreview } from "@/components/ui/ImagePreview";
 import { bulkDeleteByIds, parseIdsFromUrl } from "@/lib/filesClient";
 
@@ -52,19 +51,19 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
   const [htmlContent, setHtmlContent] = useState("");
 
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
-  const [isRenaming, setIsRenaming] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState<string>("");
 
   const currentCreative = creatives[currentCreativeIndex];
 
   React.useEffect(() => {
     if (isOpen) {
+      // Store current scroll position
       const scrollY = window.scrollY;
       document.body.style.position = "fixed";
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
     } else {
+      // Restore scroll position and body styles
       const scrollY = document.body.style.top;
       document.body.style.position = "";
       document.body.style.top = "";
@@ -75,6 +74,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
       }
     }
 
+    // Cleanup function to restore scrolling when component unmounts
     return () => {
       const scrollY = document.body.style.top;
       document.body.style.position = "";
@@ -277,36 +277,6 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
     }
   };
 
-  const handleRenameCreative = async (
-    creative: (typeof creatives)[0],
-    newName: string
-  ) => {
-    if (!newName.trim() || newName === creative.name) {
-      setIsRenaming(null);
-      setEditingName("");
-      return;
-    }
-
-    try {
-      setIsRenaming(creative.id);
-      await renameCreative({
-        creativeId: creative.id,
-        fileUrl: creative.url,
-        newName: newName.trim(),
-      });
-
-      onFileNameChange?.(creative.id, newName.trim());
-
-      if (selectedCreative?.id === creative.id) {
-        setSelectedCreative({ ...selectedCreative, name: newName.trim() });
-      }
-    } catch (error) {
-      console.error("Failed to rename creative:", error);
-    } finally {
-      setIsRenaming(null);
-      setEditingName("");
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
@@ -387,22 +357,6 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
 
                       {/* Action Buttons - Top Right */}
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
-                        {/* Rename Button */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingName(creative.name);
-                            setIsRenaming(creative.id);
-                          }}
-                          disabled={isRenaming === creative.id}
-                          className="h-6 sm:h-7 px-1.5 sm:px-2 bg-white/95 border-blue-200 text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 text-xs font-medium shadow-sm"
-                        >
-                          <span className="hidden sm:inline">Rename</span>
-                          <span className="sm:hidden">✏️</span>
-                        </Button>
-
                         {/* Delete Button */}
                         <Button
                           variant="outline"
@@ -430,57 +384,12 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
                     <div className="p-3 sm:p-4">
                       {/* Filename and File Info */}
                       <div className="mb-3">
-                        {isRenaming === creative.id ? (
-                          <div className="flex gap-1 mb-2">
-                            <input
-                              type="text"
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handleRenameCreative(creative, editingName);
-                                } else if (e.key === "Escape") {
-                                  setIsRenaming(null);
-                                  setEditingName("");
-                                }
-                              }}
-                              className="flex-1 text-xs sm:text-sm border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              autoFocus
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                handleRenameCreative(creative, editingName)
-                              }
-                              disabled={isRenaming === creative.id}
-                              className="h-6 sm:h-7 px-2 bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                            >
-                              {isRenaming === creative.id ? (
-                                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                "✓"
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setIsRenaming(null);
-                                setEditingName("");
-                              }}
-                              className="h-6 sm:h-7 px-2 border-gray-300 text-gray-600 hover:bg-gray-50 text-xs"
-                            >
-                              ×
-                            </Button>
-                          </div>
-                        ) : (
-                          <h3
-                            className="font-medium text-gray-900 text-xs sm:text-sm truncate mb-1"
-                            title={creative.name}
-                          >
-                            {creative.name}
-                          </h3>
-                        )}
+                        <h3
+                          className="font-medium text-gray-900 text-xs sm:text-sm truncate mb-1"
+                          title={creative.name}
+                        >
+                          {creative.name}
+                        </h3>
                         <div className="flex items-center justify-between text-xs text-gray-500">
                           <span
                             className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full font-medium text-xs ${
@@ -653,6 +562,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
           onClose={closeSingleCreativeView}
           creative={selectedCreative}
           onFileNameChange={handleFileNameChangeFromSingle}
+          showAdditionalNotes={true}
         />
       )}
     </div>

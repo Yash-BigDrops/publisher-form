@@ -16,6 +16,16 @@ export async function POST(req: NextRequest) {
     const id = decodeURIComponent(m[1]);
     const oldName = decodeURIComponent(m[2]);
 
+    // Check if the filename is actually changing
+    if (oldName === newName) {
+      return NextResponse.json({
+        ok: true,
+        newName,
+        fileUrl: `/api/files/${encodeURIComponent(id)}/${encodeURIComponent(newName)}`,
+        message: "No rename needed - filename unchanged"
+      });
+    }
+
     const oldAbs = await getFilePath(id, oldName);
     const newAbs = await getFilePath(id, newName);
     await fsRename(oldAbs, newAbs);

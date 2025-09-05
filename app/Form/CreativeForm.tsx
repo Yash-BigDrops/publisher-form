@@ -256,11 +256,9 @@ const CreativeForm = () => {
         localStorage.setItem("submissionId", result.submissionId || "");
         localStorage.setItem("trackingLink", result.trackingLink || "");
 
-        // Redirect to /thankyou with submission ID as slug
-        const submissionId = result.submissionId || "unknown";
-        window.location.href = `/thankyou/${submissionId}?type=${submissionType}&count=${fileCount}&trackingLink=${encodeURIComponent(
-          result.trackingLink || ""
-        )}`;
+        // Redirect to /thankyou page with clean URL
+        // Store data in localStorage and redirect to clean URL
+        window.location.replace('/thankyou');
       } else {
         throw new Error("Failed to save creative");
       }

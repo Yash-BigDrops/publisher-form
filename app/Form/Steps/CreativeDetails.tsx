@@ -658,8 +658,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
                 </div>
               </div>
               
-              {/* From & Subject Lines button - Only show when creativeType is email and no from/subject lines yet */}
-              {formData.creativeType === 'email' && !hasFromSubjectLines && (
+              {/* From & Subject Lines button - Only show when creativeType is email, no from/subject lines yet, and files are from ZIP */}
+              {formData.creativeType === 'email' && !hasFromSubjectLines && uploadedFiles.some(file => file.source === 'zip') && (
                 <div className="mt-4 pt-4 border-t border-green-200">
                   <Button
                     variant="outline"
@@ -835,8 +835,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
          </div>
        )}
        
-       {/* From & Subject Lines button below uploaded files - Only show when creativeType is email and no from/subject lines yet */}
-       {uploadedFiles.length > 0 && !hasUploadedFiles && formData.creativeType === 'email' && !hasFromSubjectLines && (
+       {/* From & Subject Lines button below uploaded files - Only show when creativeType is email, no from/subject lines yet, and files are from ZIP */}
+       {uploadedFiles.length > 0 && !hasUploadedFiles && formData.creativeType === 'email' && !hasFromSubjectLines && uploadedFiles.some(file => file.source === 'zip') && (
          <div className="mt-4 text-center">
            <Button
              variant="outline"

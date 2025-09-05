@@ -42,6 +42,7 @@ interface SingleCreativeViewProps {
     uploadId?: string; // Add uploadId for asset mapping
   };
   onFileNameChange?: (fileId: string, newFileName: string) => void;
+  showAdditionalNotes?: boolean; // New prop to control Additional Notes visibility
 }
 
 const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
@@ -49,6 +50,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   onClose,
   creative,
   onFileNameChange,
+  showAdditionalNotes = false,
 }) => {
   const [editableFileName, setEditableFileName] = useState(creative.name);
   const [editableNameOnly, setEditableNameOnly] = useState(() => {
@@ -67,17 +69,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false);
   
   // Proofreading data state
-  const [proofreadingData, setProofreadingData] = useState<ProofreadCreativeResponse>({
-    success: true,
-    issues: [],
-    suggestions: [],
-    qualityScore: {
-      grammar: 0,
-      readability: 0,
-      conversion: 0,
-      brandAlignment: 0,
-    },
-  });
+  const [proofreadingData, setProofreadingData] = useState<ProofreadCreativeResponse | null>(null);
 
   // HTML content state for editing
   const [htmlContent, setHtmlContent] = useState("");
@@ -85,6 +77,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   // HTML Editor state
   const [isSaving, setIsSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+
+  // Additional Notes state
+  const [additionalNotes, setAdditionalNotes] = useState("");
 
   // Content generation state
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
@@ -111,6 +106,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
         }
         if (data.metadata.htmlContent) {
           setHtmlContent(data.metadata.htmlContent);
+        }
+        if (data.metadata.additionalNotes) {
+          setAdditionalNotes(data.metadata.additionalNotes);
         }
         console.log("Loaded existing creative data for creative:", creative.id, data.metadata);
       } else {
@@ -318,6 +316,17 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     );
     const newFileName = editableNameOnly.trim() + originalExtension;
 
+    // Check if the filename is actually changing
+    if (creative.name === newFileName) {
+      // No change needed, just exit editing mode
+      setIsEditing(false);
+      return;
+    }
+
+    // Update state immediately for smooth transition
+    setEditableFileName(newFileName);
+    setIsEditing(false);
+
     try {
       // Call the rename API
       await renameCreative({
@@ -325,9 +334,6 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
         fileUrl: creative.url,
         newName: newFileName,
       });
-    
-    // Update both state variables
-      setEditableFileName(newFileName);
     
     // Update the creative object to reflect changes everywhere
       creative.name = newFileName;
@@ -347,8 +353,6 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
           : creative.name
       );
       // You can add toast notification here for error feedback
-    } finally {
-      setIsEditing(false);
     }
   };
 
@@ -440,8 +444,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
           creativeId: creative.id,
           fromLines: mergedFromLines,
           subjectLines: mergedSubjectLines,
-          proofreadingData,
+          proofreadingData: proofreadingData || undefined,
           htmlContent,
+          additionalNotes,
           metadata: {
             lastGenerated: new Date().toISOString(),
             creativeType: creative.type,
@@ -493,18 +498,19 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
         
         // Save proofreading results immediately for this creative
         try {
-          await saveCreativeMetadata({
-            creativeId: creative.id,
-            fromLines,
-            subjectLines,
-            proofreadingData: result,
-            htmlContent,
-            metadata: {
-              lastProofread: new Date().toISOString(),
-              creativeType: creative.type,
-              fileName: creative.name,
-            },
-          });
+                  await saveCreativeMetadata({
+          creativeId: creative.id,
+          fromLines,
+          subjectLines,
+          proofreadingData: result,
+          htmlContent,
+          additionalNotes,
+          metadata: {
+            lastProofread: new Date().toISOString(),
+            creativeType: creative.type,
+            fileName: creative.name,
+          },
+        });
           console.log("Proofreading results saved immediately for creative:", creative.id);
         } catch (saveError) {
           console.error("Failed to save proofreading results:", saveError);
@@ -601,8 +607,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
         creativeId: creative.id,
         fromLines,
         subjectLines,
-        proofreadingData,
+        proofreadingData: proofreadingData || undefined,
         htmlContent,
+        additionalNotes,
         metadata: {
           lastSaved: new Date().toISOString(),
           creativeType: creative.type,
@@ -665,49 +672,54 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
             {/* Filename Section */}
             <div className="min-w-0">
               {isEditing ? (
-                <div className="flex items-center gap-1 sm:gap-2">
+                <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center">
                     <Input
                       value={editableNameOnly}
                       onChange={handleFileNameChange}
                       onKeyDown={handleKeyDown}
-                      className="text-xs sm:text-sm font-medium h-6 sm:h-7 w-24 sm:w-32 md:w-40 rounded-r-none border-r-0"
+                      className="text-xs sm:text-sm font-medium h-8 sm:h-9 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white px-3 py-2 w-auto min-w-0 transition-all duration-200"
                       autoFocus
                       placeholder="Filename"
                     />
-                    <span className="text-xs text-gray-500 font-mono px-1 sm:px-2 py-1 h-6 sm:h-7 bg-gray-100 rounded-r border border-l-0 border-gray-300 flex items-center whitespace-nowrap">
+                    <span className="text-xs sm:text-sm text-gray-700 font-medium px-2 py-2 h-8 sm:h-9 flex items-center whitespace-nowrap">
                       {creative.name.substring(creative.name.lastIndexOf("."))}
                     </span>
                   </div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleFileNameSave}
-                    className="p-1 h-6 w-6 sm:h-7 sm:w-7 bg-green-600 hover:bg-green-700 flex items-center justify-center"
-                  >
-                    <Check className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEditableFileName(creative.name);
-                      const lastDotIndex = creative.name.lastIndexOf(".");
-                      setEditableNameOnly(
-                        lastDotIndex > 0
-                          ? creative.name.substring(0, lastDotIndex)
-                          : creative.name
-                      );
-                      setIsEditing(false);
-                    }}
-                    className="p-1 h-6 w-6 sm:h-7 sm:w-7 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 flex items-center justify-center"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleFileNameSave}
+                      className="h-8 w-8 sm:h-9 sm:w-9 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center"
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        // Update state immediately for smooth transition
+                        setEditableFileName(creative.name);
+                        setIsEditing(false);
+                        
+                        // Reset the editable name after state update
+                        const lastDotIndex = creative.name.lastIndexOf(".");
+                        setEditableNameOnly(
+                          lastDotIndex > 0
+                            ? creative.name.substring(0, lastDotIndex)
+                            : creative.name
+                        );
+                      }}
+                      className="h-8 w-8 sm:h-9 sm:w-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 rounded-lg shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-1">
-                  <span className="text-xs sm:text-sm font-medium text-gray-800 max-w-[120px] sm:max-w-[160px] md:max-w-[200px] truncate">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm font-medium text-gray-800">
                     {editableFileName}
                   </span>
                   <Button
@@ -722,9 +734,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                       );
                       setIsEditing(true);
                     }}
-                    className="p-0.5 h-5 w-5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors flex-shrink-0"
+                    className="h-8 w-8 sm:h-9 sm:w-9 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 flex-shrink-0 shadow-sm hover:shadow-md"
                   >
-                    <Edit3 className="h-3 w-3" />
+                    <Edit3 className="h-4 w-4" />
                   </Button>
                 </div>
               )}
@@ -812,12 +824,12 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
             <div className="flex-1 bg-white border border-gray-200 rounded-lg overflow-auto min-h-[300px] lg:min-h-0">
               {/* Image preview with fallback to creative.url if previewUrl not available */}
                 {isImage && (creative.previewUrl || creative.url) ? (
-                  <div className="w-full p-4">
+                  <div className="w-full p-4 flex justify-center">
                     <ImagePreview 
                       src={creative.previewUrl || creative.url}
                       alt={creative.name}
                       fileName={creative.name}
-                    className="w-full h-auto rounded-lg shadow-sm"
+                    className="max-w-[600px] w-full h-auto rounded-lg shadow-sm"
                   />
                 </div>
               ) : isHtml ? (
@@ -1078,11 +1090,11 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                        Issues Found{proofreadingData.issues !== undefined ? ` (${proofreadingData.issues.length})` : ''}
+                        Issues Found{proofreadingData && proofreadingData.issues && proofreadingData.issues.length > 0 ? ` (${proofreadingData.issues.length})` : ''}
                       </h4>
                       
                       <div className="space-y-2">
-                        {proofreadingData.issues &&
+                        {proofreadingData && proofreadingData.issues &&
                         proofreadingData.issues.length > 0 ? (
                           proofreadingData.issues.map(
                             (issue, index: number) => (
@@ -1127,12 +1139,12 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     </div>
 
                     {/* Suggestions */}
-                    {proofreadingData.suggestions &&
+                    {proofreadingData && proofreadingData.suggestions &&
                       proofreadingData.suggestions.length > 0 && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                        Suggestions{proofreadingData.suggestions !== undefined ? ` (${proofreadingData.suggestions.length})` : ''}
+                        Suggestions{proofreadingData && proofreadingData.suggestions && proofreadingData.suggestions.length > 0 ? ` (${proofreadingData.suggestions.length})` : ''}
                       </h4>
                       <div className="space-y-2">
                             {proofreadingData.suggestions.map(
@@ -1157,7 +1169,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                         )}
 
                     {/* Quality Score */}
-                    {proofreadingData.qualityScore && (
+                    {proofreadingData && proofreadingData.qualityScore && (
                       <div className="space-y-3">
                         <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                           <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
@@ -1201,6 +1213,42 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Additional Notes Container - Only show when coming from MultipleCreativeView */}
+                {showAdditionalNotes && (
+                  <div className="p-4 sm:p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-gray-200 mb-4 gap-3 sm:gap-0">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-100 rounded-lg">
+                          <FileText className="h-5 w-5 text-indigo-600" />
+                        </div>
+                        <h3 className="text-sm sm:text-lg font-semibold text-gray-800">
+                          Additional Notes
+                        </h3>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block">
+                          Notes & Comments
+                        </Label>
+                        <Textarea
+                          value={additionalNotes}
+                          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                            setAdditionalNotes(e.target.value)
+                          }
+                          placeholder="Add any additional notes, comments, or instructions for this creative..."
+                          rows={4}
+                          className="w-full resize-none text-xs sm:text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500/20"
+                        />
+                        <p className="text-xs text-gray-500 mt-2">
+                          Use this space to add any specific notes, instructions, or comments about this creative.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

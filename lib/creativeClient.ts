@@ -46,6 +46,7 @@ export async function saveCreativeMetadata(arg: {
   subjectLines?: string;
   proofreadingData?: unknown;
   htmlContent?: string;
+  additionalNotes?: string;
   metadata?: Record<string, unknown>;
 }) {
   const r = await fetch(API_ENDPOINTS.CREATIVE_SAVE_METADATA, {
