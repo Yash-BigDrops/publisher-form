@@ -87,6 +87,24 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
     };
   }, [isOpen]);
 
+  // ESC key handler for Save and Continue functionality
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isOpen) {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   React.useEffect(() => {
     if (
       isOpen &&

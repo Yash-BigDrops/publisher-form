@@ -153,6 +153,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     };
   }, [isOpen]);
 
+
   // Function to fetch HTML content from uploaded file
   const fetchHtmlContent = React.useCallback(async () => {
     try {
@@ -288,6 +289,57 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   }, [isOpen, creative.type, creative.name, fetchHtmlContent]);
 
   // HTML Content Loading & Image Hosting implemented with /api/files/[id]/[...path] and asset rewriting
+
+  // Comprehensive Save Function
+  const handleSaveAll = React.useCallback(async () => {
+    try {
+      setIsSaving(true);
+      console.log("Saving all creative data for:", creative.id);
+
+      // Save all metadata including proofreading, email content, etc.
+      await saveCreativeMetadata({
+        creativeId: creative.id,
+        fromLines,
+        subjectLines,
+        proofreadingData: proofreadingData || undefined,
+        htmlContent,
+        additionalNotes,
+        metadata: {
+          lastSaved: new Date().toISOString(),
+          creativeType: creative.type,
+          fileName: creative.name,
+        },
+      });
+
+      console.log("All creative data saved successfully");
+      
+      // Close the modal after successful save
+      onClose();
+    } catch (error) {
+      console.error("Failed to save creative data:", error);
+      // Show error feedback (you can add a toast notification here)
+    } finally {
+      setIsSaving(false);
+    }
+  }, [creative.id, fromLines, subjectLines, proofreadingData, htmlContent, additionalNotes, creative.type, creative.name, onClose]);
+
+  // ESC key handler for Save and Continue functionality
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isOpen) {
+        event.preventDefault();
+        handleSaveAll();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, handleSaveAll]);
 
   if (!isOpen) return null;
 
@@ -596,38 +648,6 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
     }
   };
 
-  // Comprehensive Save Function
-  const handleSaveAll = async () => {
-    try {
-      setIsSaving(true);
-      console.log("Saving all creative data for:", creative.id);
-
-      // Save all metadata including proofreading, email content, etc.
-      await saveCreativeMetadata({
-        creativeId: creative.id,
-        fromLines,
-        subjectLines,
-        proofreadingData: proofreadingData || undefined,
-        htmlContent,
-        additionalNotes,
-        metadata: {
-          lastSaved: new Date().toISOString(),
-          creativeType: creative.type,
-          fileName: creative.name,
-        },
-      });
-
-      console.log("All creative data saved successfully");
-      
-      // Close the modal after successful save
-      onClose();
-    } catch (error) {
-      console.error("Failed to save creative data:", error);
-      // Show error feedback (you can add a toast notification here)
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // File Deletion & Cleanup implemented with /api/files/[id] and /api/files/bulk-delete endpoints
 

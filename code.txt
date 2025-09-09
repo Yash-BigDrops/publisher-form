@@ -1,0 +1,14 @@
+ESC Key Functionality Added to Modal Components
+
+Changes made to components/modals/SingleCreativeView.tsx and components/modals/MultipleCreativeView.tsx:
+
+1. SingleCreativeView.tsx:
+   - Added ESC key handler that triggers handleSaveAll() function
+   - Wrapped handleSaveAll in useCallback for proper dependency management
+   - ESC key now acts same as "Save and Continue" button
+
+2. MultipleCreativeView.tsx:
+   - Added ESC key handler that triggers onClose() function
+   - ESC key now acts same as "Save and Continue" button
+
+Both components now support ESC key press to save and close the modal, providing better keyboard accessibility and user experience.
