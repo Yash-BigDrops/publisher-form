@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ErrorMessage } from '@/components/ui/error-message'
-import React, { useState, useCallback, useRef } from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { TELEGRAM_BOT_URL } from '@/constants'
 import { useFormValidation } from '@/hooks/useFormValidation'
 
@@ -29,6 +29,7 @@ const ContactDetails: React.FC<ContactDetailsProps> = ({
   const [verificationAttempted, setVerificationAttempted] = useState(false)
   const [verificationError, setVerificationError] = useState<string | null>(null)
   const [hasClickedStartBot, setHasClickedStartBot] = useState(false)
+  const [isCheckingDatabase, setIsCheckingDatabase] = useState(false)
   
   // Debounce verification attempts
   const verifyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -192,12 +193,54 @@ const handleVerify = useCallback(async () => {
   }
 }, [formData.telegramId])
 
+const checkUserInDatabase = useCallback(async (telegramId: string) => {
+  if (!telegramId || telegramId === '@') {
+    setIsVerified(false)
+    return
+  }
+
+  setIsCheckingDatabase(true)
+  setVerificationError(null)
+
+  try {
+    const response = await fetch(API_ENDPOINTS.TELEGRAM_VERIFY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telegramId }),
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      setIsVerified(data.verified)
+      if (data.verified) {
+        setVerificationAttempted(true)
+      }
+    } else {
+      setIsVerified(false)
+    }
+  } catch (error) {
+    console.error('Error checking user in database:', error)
+    setIsVerified(false)
+  } finally {
+    setIsCheckingDatabase(false)
+  }
+}, [])
+
 const handleStartBot = useCallback(() => {
   setHasClickedStartBot(true)
   setVerificationError(null)
   // Open the bot in a new tab
   window.open(TELEGRAM_BOT_URL, '_blank', 'noopener,noreferrer')
 }, [])
+
+// Check database when Telegram ID changes
+useEffect(() => {
+  const timeoutId = setTimeout(() => {
+    checkUserInDatabase(formData.telegramId)
+  }, 500) // Debounce for 500ms
+
+  return () => clearTimeout(timeoutId)
+}, [formData.telegramId, checkUserInDatabase])
 
 const getFieldError = (fieldName: string): string => {
   if (!validationHook) return ''
@@ -240,14 +283,19 @@ const isFieldTouched = (fieldName: string): boolean => {
                   variant="outline"
                   size="sm"
                   type="button"
-                  onClick={hasClickedStartBot ? handleVerify : handleStartBot}
-                  disabled={isVerifying || isVerified || !formData.telegramId || formData.telegramId === '@'}
+                  onClick={isVerified ? undefined : (hasClickedStartBot ? handleVerify : handleStartBot)}
+                  disabled={isVerifying || isCheckingDatabase || !formData.telegramId || formData.telegramId === '@'}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 px-3 text-xs"
                 >
                   {isVerifying ? (
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
                       <span>Verifying...</span>
+                    </div>
+                  ) : isCheckingDatabase ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Checking...</span>
                     </div>
                   ) : isVerified ? (
                     <div className="flex items-center gap-2 text-success-dark">
