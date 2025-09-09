@@ -28,6 +28,7 @@ const ContactDetails: React.FC<ContactDetailsProps> = ({
   const [isVerified, setIsVerified] = useState(false)
   const [verificationAttempted, setVerificationAttempted] = useState(false)
   const [verificationError, setVerificationError] = useState<string | null>(null)
+  const [hasClickedStartBot, setHasClickedStartBot] = useState(false)
   
   // Debounce verification attempts
   const verifyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -191,6 +192,13 @@ const handleVerify = useCallback(async () => {
   }
 }, [formData.telegramId])
 
+const handleStartBot = useCallback(() => {
+  setHasClickedStartBot(true)
+  setVerificationError(null)
+  // Open the bot in a new tab
+  window.open(TELEGRAM_BOT_URL, '_blank', 'noopener,noreferrer')
+}, [])
+
 const getFieldError = (fieldName: string): string => {
   if (!validationHook) return ''
   return validationHook.getFieldErrorMessage(fieldName)
@@ -232,7 +240,7 @@ const isFieldTouched = (fieldName: string): boolean => {
                   variant="outline"
                   size="sm"
                   type="button"
-                  onClick={handleVerify}
+                  onClick={hasClickedStartBot ? handleVerify : handleStartBot}
                   disabled={isVerifying || isVerified || !formData.telegramId || formData.telegramId === '@'}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 px-3 text-xs"
                 >
@@ -246,8 +254,10 @@ const isFieldTouched = (fieldName: string): boolean => {
                       <span>✅</span>
                       <span>Verified</span>
                     </div>
-                  ) : (
+                  ) : hasClickedStartBot ? (
                     'Verify'
+                  ) : (
+                    'Start Bot'
                   )}
                 </Button>
               </div>
@@ -286,21 +296,6 @@ const isFieldTouched = (fieldName: string): boolean => {
               </div>
             )}
             
-            {/* Show verification steps box for Telegram field when verification was attempted and failed */}
-            {field.name === 'telegramId' && verificationAttempted && !isVerifying && !isVerified && !verificationError && (
-              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                <h4 className="text-sm font-medium text-yellow-800 mb-2">📋 Steps to Verify Your Telegram ID:</h4>
-                <ol className="text-xs text-yellow-700 space-y-1 list-decimal list-inside mb-3">
-                  <li>Click on Start Bot Button</li>
-                  <li>Send /start to the bot</li>
-                  <li>Come back and Verify again</li>
-                </ol>
-                <Button asChild variant="outline" size="xs"
-                  className="text-xs w-max border-yellow-300 text-yellow-700 hover:bg-yellow-200">
-                  <a href={TELEGRAM_BOT_URL} target="_blank" rel="noopener noreferrer">Start Bot</a>
-                </Button>
-              </div>
-            )}
           </div>
         ))}
       </div>  

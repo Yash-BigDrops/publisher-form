@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { X, Sparkles, Info, PencilLine } from 'lucide-react'
 import { Constants } from '@/app/Constants/Constants'
+import { generateEmailContent } from '@/lib/generationClient'
 
 interface FromSubjectLinesModalProps {
   isOpen: boolean
@@ -27,6 +28,7 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   const [fromLines, setFromLines] = useState(initialFromLines)
   const [subjectLines, setSubjectLines] = useState(initialSubjectLines)
   const [errors, setErrors] = useState<{ fromLines?: string; subjectLines?: string }>({})
+  const [isGenerating, setIsGenerating] = useState(false)
 
   // Prevent background scrolling when modal is open
   useEffect(() => {
@@ -81,6 +83,46 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
     setSubjectLines('')
     setErrors({})
     onClose()
+  }
+
+  const handleGenerateContent = async () => {
+    try {
+      setIsGenerating(true)
+      console.log("Generating email content...")
+
+      const { fromLines: newFromLines, subjectLines: newSubjectLines } =
+        await generateEmailContent({
+          creativeType: "Email",
+          notes: "",
+          sampleText: "",
+          maxFrom: 4,
+          maxSubject: 8,
+        })
+
+      const mergeContent = (existing: string, newItems: string[]) => {
+        const existingLines = existing
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean)
+        const newLines = newItems.map((s) => s.trim()).filter(Boolean)
+        const allLines = [...existingLines, ...newLines]
+        const uniqueLines = Array.from(new Set(allLines))
+        return uniqueLines.join("\n")
+      }
+
+      const mergedFromLines = mergeContent(fromLines, newFromLines)
+      const mergedSubjectLines = mergeContent(subjectLines, newSubjectLines)
+      
+      setFromLines(mergedFromLines)
+      setSubjectLines(mergedSubjectLines)
+
+      console.log("Email content generated successfully")
+    } catch (error) {
+      console.error("Failed to generate email content:", error)
+      // You could add a toast notification here
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   if (!isOpen) return null
@@ -174,13 +216,12 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
             <div className="pt-4">
               <Button
                 variant="outline"
-                onClick={() => {
-                  // TODO: Implement AI generation logic
-                }}
-                className="w-full border-green-300 text-green-700 hover:bg-green-50"
+                onClick={handleGenerateContent}
+                disabled={isGenerating}
+                className="w-full border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Sparkles className="h-4 w-4 mr-2" />
-                Generate From & Subject Lines
+                {isGenerating ? "Generating..." : "Generate From & Subject Lines"}
               </Button>
             </div>
           )}

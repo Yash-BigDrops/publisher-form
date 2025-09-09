@@ -108,7 +108,7 @@ async function init() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
-
+  
   await pool.query(`
     CREATE TABLE IF NOT EXISTS creative_metadata (
       id SERIAL PRIMARY KEY,
@@ -117,6 +117,7 @@ async function init() {
       subject_lines TEXT,
       proofreading_data JSONB,
       html_content TEXT,
+      additional_notes TEXT,
       metadata JSONB,
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW()
@@ -130,6 +131,12 @@ async function init() {
     ADD COLUMN IF NOT EXISTS company_name TEXT,
     ADD COLUMN IF NOT EXISTS telegram_id TEXT,
     ADD COLUMN IF NOT EXISTS creative_type TEXT;
+  `);
+
+  // Add missing columns to existing creative_metadata table if they don't exist
+  await pool.query(`
+    ALTER TABLE creative_metadata 
+    ADD COLUMN IF NOT EXISTS additional_notes TEXT;
   `);
 }
 

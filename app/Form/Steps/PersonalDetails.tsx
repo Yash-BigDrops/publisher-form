@@ -121,10 +121,11 @@ const PersonalDetails: React.FC<PersonalDetailsProps> = ({
               onChange={handleChange}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
-              pattern="[a-zA-Z\s'-]+"
+              pattern="[a-zA-Z\s\-']+"
               inputMode="text"
               autoComplete={field.name === 'firstName' ? 'given-name' : 'family-name'}
               className={hasFieldError(field.name) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
+              suppressHydrationWarning={true}
             />
             <ErrorMessage 
               message={getFieldError(field.name)}

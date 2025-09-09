@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     try {
       // Get existing metadata for the creative
       const result = await client.query(
-        `SELECT from_lines, subject_lines, proofreading_data, html_content, metadata 
+        `SELECT from_lines, subject_lines, proofreading_data, html_content, additional_notes, metadata 
          FROM creative_metadata 
          WHERE creative_id = $1`,
         [creativeId]
@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
             subjectLines: metadata.subject_lines,
             proofreadingData: metadata.proofreading_data,
             htmlContent: metadata.html_content,
+            additionalNotes: metadata.additional_notes,
             additionalMetadata: metadata.metadata,
           }
         });

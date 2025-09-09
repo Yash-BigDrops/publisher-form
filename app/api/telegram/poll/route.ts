@@ -4,21 +4,31 @@ import { getPool } from '@/lib/db';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 
 async function getOffset() {
-  const pool = getPool();
-  const { rows } = await pool.query(
-    `SELECT value FROM telegram_state WHERE key = 'last_update_id' LIMIT 1`
-  );
-  return rows[0]?.value ? parseInt(rows[0].value, 10) : undefined;
+  try {
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `SELECT value FROM telegram_state WHERE key = 'last_update_id' LIMIT 1`
+    );
+    return rows[0]?.value ? parseInt(rows[0].value, 10) : undefined;
+  } catch (error) {
+    console.error('Error getting offset:', error);
+    return undefined;
+  }
 }
 
 async function setOffset(id: number) {
-  const pool = getPool();
-  await pool.query(
-    `INSERT INTO telegram_state(key, value, updated_at)
-     VALUES('last_update_id', $1, NOW())
-     ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
-    [String(id)]
-  );
+  try {
+    const pool = getPool();
+    await pool.query(
+      `INSERT INTO telegram_state(key, value, updated_at)
+       VALUES('last_update_id', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value=$1, updated_at=NOW()`,
+      [String(id)]
+    );
+  } catch (error) {
+    console.error('Error setting offset:', error);
+    throw error;
+  }
 }
 
 async function sendTelegramMessage(chat_id: number, text: string) {
@@ -33,6 +43,21 @@ async function sendTelegramMessage(chat_id: number, text: string) {
 export async function POST() {
   try {
     if (!TOKEN) return NextResponse.json({ ok: false, error: 'TELEGRAM_BOT_TOKEN missing' }, { status: 500 });
+
+    // Check if webhook is active - if so, we can't use getUpdates
+    const webhookInfo = await fetch(`https://api.telegram.org/bot${TOKEN}/getWebhookInfo`, { cache: 'no-store' });
+    const webhookData = await webhookInfo.json();
+    
+    if (webhookData.ok && webhookData.result.url) {
+      // Webhook is active, so we don't need to poll
+      return NextResponse.json({ 
+        ok: true, 
+        message: 'Webhook is active, polling not needed',
+        webhook_url: webhookData.result.url,
+        processed: 0,
+        last_update_id: 0
+      });
+    }
 
     const offset = await getOffset();
     const url = new URL(`https://api.telegram.org/bot${TOKEN}/getUpdates`);
@@ -98,6 +123,11 @@ export async function POST() {
     if (highestId) await setOffset(highestId);
     return NextResponse.json({ ok: true, processed: data.result?.length || 0, last_update_id: highestId });
   } catch (e: unknown) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : 'poll error' }, { status: 500 });
+    console.error('Telegram poll error:', e);
+    return NextResponse.json({ 
+      ok: false, 
+      error: e instanceof Error ? e.message : 'poll error',
+      details: e instanceof Error ? e.stack : undefined
+    }, { status: 500 });
   }
 }

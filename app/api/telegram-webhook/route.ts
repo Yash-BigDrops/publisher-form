@@ -16,7 +16,10 @@ async function sendTelegramMessage(chat_id: number, text: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('Webhook received:', new Date().toISOString());
+    
     if (!TOKEN) {
+      console.error('BOT token not set');
       return NextResponse.json({ ok: false, error: 'BOT token not set' }, { status: 500 });
     }
 
@@ -28,9 +31,13 @@ export async function POST(req: NextRequest) {
     }
 
     const update = await req.json();
+    console.log('Update received:', JSON.stringify(update, null, 2));
 
     const msg = update?.message;
-    if (!msg) return NextResponse.json({ ok: true });
+    if (!msg) {
+      console.log('No message in update');
+      return NextResponse.json({ ok: true });
+    }
 
     const chatId = msg.chat?.id;
     const username: string | null = msg.chat?.username || null;
@@ -38,6 +45,7 @@ export async function POST(req: NextRequest) {
     const text: string = msg.text || '';
 
     if (typeof text === 'string' && text.trim().toLowerCase().startsWith('/start')) {
+      console.log('Processing /start command for user:', { chatId, username, firstName });
       const pool = getPool();
       const client = await pool.connect();
       try {
@@ -65,7 +73,9 @@ export async function POST(req: NextRequest) {
         }
 
         await client.query('COMMIT');
+        console.log('User successfully added to database:', { username, chatId, firstName });
       } catch (e) {
+        console.error('Database error:', e);
         await client.query('ROLLBACK');
         throw e;
       } finally {
@@ -82,6 +92,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
+    console.error('Webhook error:', e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : 'webhook error' }, { status: 200 });
   }
 }

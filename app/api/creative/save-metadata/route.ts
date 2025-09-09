@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       subjectLines,
       proofreadingData,
       htmlContent,
+      additionalNotes,
       metadata = {},
     } = body || {};
 
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest) {
             subject_lines = $3,
             proofreading_data = $4,
             html_content = $5,
-            metadata = $6,
+            additional_notes = $6,
+            metadata = $7,
             updated_at = NOW()
           WHERE creative_id = $1`,
           [
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest) {
             subjectLines || null,
             proofreadingData ? JSON.stringify(proofreadingData) : null,
             htmlContent || null,
+            additionalNotes || null,
             JSON.stringify(metadata),
           ]
         );
@@ -60,14 +63,15 @@ export async function POST(req: NextRequest) {
         await client.query(
           `INSERT INTO creative_metadata (
             creative_id, from_lines, subject_lines, proofreading_data, 
-            html_content, metadata, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+            html_content, additional_notes, metadata, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
           [
             creativeId,
             fromLines || null,
             subjectLines || null,
             proofreadingData ? JSON.stringify(proofreadingData) : null,
             htmlContent || null,
+            additionalNotes || null,
             JSON.stringify(metadata),
           ]
         );
