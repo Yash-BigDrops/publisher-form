@@ -30,6 +30,7 @@ const ContactDetails: React.FC<ContactDetailsProps> = ({
   const [verificationError, setVerificationError] = useState<string | null>(null)
   const [hasClickedStartBot, setHasClickedStartBot] = useState(false)
   const [isCheckingDatabase, setIsCheckingDatabase] = useState(false)
+  const [showStartBot, setShowStartBot] = useState(false)
   
   // Debounce verification attempts
   const verifyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -183,6 +184,9 @@ const handleVerify = useCallback(async () => {
     
     if (!data.verified) {
       setVerificationError('Telegram ID not found. Make sure you sent /start to the bot first.')
+      setShowStartBot(true) // Show Start Bot if verification fails
+    } else {
+      setShowStartBot(false) // Hide Start Bot if verified
     }
   } catch (err) {
     console.error('Verification failed:', err)
@@ -196,6 +200,7 @@ const handleVerify = useCallback(async () => {
 const checkUserInDatabase = useCallback(async (telegramId: string) => {
   if (!telegramId || telegramId === '@') {
     setIsVerified(false)
+    setShowStartBot(false)
     return
   }
 
@@ -214,13 +219,18 @@ const checkUserInDatabase = useCallback(async (telegramId: string) => {
       setIsVerified(data.verified)
       if (data.verified) {
         setVerificationAttempted(true)
+        setShowStartBot(false)
+      } else {
+        setShowStartBot(true)
       }
     } else {
       setIsVerified(false)
+      setShowStartBot(true)
     }
   } catch (error) {
     console.error('Error checking user in database:', error)
     setIsVerified(false)
+    setShowStartBot(true)
   } finally {
     setIsCheckingDatabase(false)
   }
@@ -228,6 +238,7 @@ const checkUserInDatabase = useCallback(async (telegramId: string) => {
 
 const handleStartBot = useCallback(() => {
   setHasClickedStartBot(true)
+  setShowStartBot(false) 
   setVerificationError(null)
   // Open the bot in a new tab
   window.open(TELEGRAM_BOT_URL, '_blank', 'noopener,noreferrer')
@@ -283,7 +294,7 @@ const isFieldTouched = (fieldName: string): boolean => {
                   variant="outline"
                   size="sm"
                   type="button"
-                  onClick={isVerified ? undefined : (hasClickedStartBot ? handleVerify : handleStartBot)}
+                  onClick={isVerified ? undefined : (showStartBot ? handleStartBot : handleVerify)}
                   disabled={isVerifying || isCheckingDatabase || !formData.telegramId || formData.telegramId === '@'}
                   className="absolute right-2 top-1/2 transform -translate-y-1/2 h-8 px-3 text-xs"
                 >
@@ -302,10 +313,10 @@ const isFieldTouched = (fieldName: string): boolean => {
                       <span>✅</span>
                       <span>Verified</span>
                     </div>
-                  ) : hasClickedStartBot ? (
-                    'Verify'
-                  ) : (
+                  ) : showStartBot ? (
                     'Start Bot'
+                  ) : (
+                    'Verify'
                   )}
                 </Button>
               </div>
