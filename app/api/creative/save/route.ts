@@ -47,6 +47,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check for required environment variables
+    if (!process.env.DATABASE_URL) {
+      console.error("Missing DATABASE_URL environment variable");
+      return NextResponse.json(
+        { error: "Database configuration missing" },
+        { status: 500 }
+      );
+    }
+
+    if (!process.env.SMTP_HOST || !process.env.SMTP_PORT || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.error("Missing SMTP environment variables");
+      return NextResponse.json(
+        { error: "Email configuration missing" },
+        { status: 500 }
+      );
+    }
+
     const pool = getPool();
     const client = await pool.connect();
     let submissionId: number | null = null;
@@ -111,11 +128,14 @@ export async function POST(req: NextRequest) {
     }
 
     const contactName = [firstName, lastName].filter(Boolean).join(" ") || "there";
-    const trackingLink = `https://www.bigdropsmarketing.com/tracking_link/BDMG${submissionId}`;
+    const trackingLink = `https://www.cms.bigdropsmg.com/tracking_link/BDMG${submissionId}`;
+    const creativeNames = files.map((f: { fileName: string }) => f.fileName).filter(Boolean);
     const html = createSubmissionEmail({
       contactName,
       priority: String(priority),
       trackingLink,
+      creativeNames,
+      creativeType: creativeType || undefined,
     });
     await sendEmail({
       to: contactEmail,
@@ -126,6 +146,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, submissionId, trackingLink });
   } catch (e) {
     console.error("save creative error:", e);
-    return NextResponse.json({ error: "Failed to save creative" }, { status: 500 });
+    
+    // Provide more specific error messages based on the error type
+    if (e instanceof Error) {
+      if (e.message.includes("DATABASE_URL")) {
+        return NextResponse.json({ error: "Database configuration error" }, { status: 500 });
+      }
+      if (e.message.includes("SMTP")) {
+        return NextResponse.json({ error: "Email configuration error" }, { status: 500 });
+      }
+      if (e.message.includes("connection") || e.message.includes("timeout")) {
+        return NextResponse.json({ error: "Database connection error" }, { status: 500 });
+      }
+    }
+    
+    return NextResponse.json({ 
+      error: "Failed to save creative", 
+      details: process.env.NODE_ENV === 'development' ? e instanceof Error ? e.message : String(e) : undefined
+    }, { status: 500 });
   }
 }
