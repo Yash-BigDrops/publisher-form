@@ -905,6 +905,9 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
         initialFromLines={formData.fromLines}
         initialSubjectLines={formData.subjectLines}
         isMultipleCreative={uploadedFiles.some(file => file.source === 'zip')}
+        uploadedFiles={uploadedFiles}
+        creativeType={formData.creativeType}
+        offerId={formData.offerId}
       />
       
       {/* Single Creative View Modal */}

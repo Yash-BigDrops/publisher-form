@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { X, Sparkles, Info, PencilLine } from 'lucide-react'
 import { Constants } from '@/app/Constants/Constants'
-import { generateEmailContent } from '@/lib/generationClient'
+import { generateEmailContent, analyzeCreatives } from '@/lib/generationClient'
 
 interface FromSubjectLinesModalProps {
   isOpen: boolean
@@ -15,6 +15,17 @@ interface FromSubjectLinesModalProps {
   initialFromLines?: string
   initialSubjectLines?: string
   isMultipleCreative?: boolean // Add prop to indicate if this is multiple creative upload
+  uploadedFiles?: Array<{
+    id: string;
+    name: string;
+    url: string;
+    type: string;
+    html?: boolean;
+    embeddedHtml?: string;
+    uploadId?: string;
+  }>; // Add prop for uploaded files
+  creativeType?: string; // Add prop for creative type
+  offerId?: string; // Add prop for offer ID
 }
 
 const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
@@ -23,10 +34,13 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   onSave,
   initialFromLines = '',
   initialSubjectLines = '',
-  isMultipleCreative = false
+  isMultipleCreative = false,
+  uploadedFiles = [],
+  creativeType = 'email',
+  offerId = ''
 }) => {
-  const [fromLines, setFromLines] = useState(initialFromLines)
-  const [subjectLines, setSubjectLines] = useState(initialSubjectLines)
+  const [fromLines, setFromLines] = useState("")
+  const [subjectLines, setSubjectLines] = useState("")
   const [errors, setErrors] = useState<{ fromLines?: string; subjectLines?: string }>({})
   const [isGenerating, setIsGenerating] = useState(false)
 
@@ -47,8 +61,9 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   // Update state when modal opens with initial values
   useEffect(() => {
     if (isOpen) {
-      setFromLines(initialFromLines)
-      setSubjectLines(initialSubjectLines)
+      // Always start with empty content to avoid showing placeholder text as actual content
+      setFromLines("")
+      setSubjectLines("")
       setErrors({})
     }
   }, [isOpen, initialFromLines, initialSubjectLines])
@@ -88,18 +103,97 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   const handleGenerateContent = async () => {
     try {
       setIsGenerating(true)
-      console.log("Generating email content...")
+      console.log("Analyzing creatives and generating email content...")
+
+      let creativeAnalysis: {
+        extractedText: string;
+        imageDescriptions: string[];
+        htmlContent: string;
+        fileCount: number;
+        creativeTypes: string[];
+        contentType: string;
+      } | undefined = undefined
+
+      // First, analyze the uploaded creatives if available
+      if (uploadedFiles && uploadedFiles.length > 0) {
+        try {
+          console.log(`Analyzing ${uploadedFiles.length} creative files...`)
+          const analysisResult = await analyzeCreatives({
+            files: uploadedFiles,
+            creativeType,
+            offerId
+          })
+
+          if (analysisResult.success && analysisResult.analysis) {
+            creativeAnalysis = analysisResult.analysis
+            console.log(`Creative analysis complete: ${analysisResult.analysis.fileCount} files analyzed`)
+          } else {
+            console.warn("Creative analysis failed:", analysisResult.error)
+          }
+        } catch (analysisError) {
+          console.error("Error analyzing creatives:", analysisError)
+          // Continue with generation even if analysis fails
+        }
+      }
+
+      // Generate email content with or without creative analysis
+      let sampleText = "";
+      if (creativeAnalysis && creativeAnalysis.extractedText) {
+        sampleText = creativeAnalysis.extractedText.substring(0, 1000);
+      } else if (uploadedFiles && uploadedFiles.length > 0) {
+        // Fallback: try to get content from uploaded files
+        const htmlFiles = uploadedFiles.filter(file => file.type === 'html' || file.html);
+        if (htmlFiles.length > 0) {
+          // Use the first HTML file's content
+          const firstHtmlFile = htmlFiles[0];
+          if (firstHtmlFile.embeddedHtml) {
+            sampleText = firstHtmlFile.embeddedHtml
+              .replace(/<[^>]*>/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 1000);
+          }
+        }
+      }
 
       const { fromLines: newFromLines, subjectLines: newSubjectLines } =
         await generateEmailContent({
-          creativeType: "Email",
-          notes: "",
-          sampleText: "",
+          creativeType: creativeType === 'email' ? "Email" : creativeType,
+          sampleText,
           maxFrom: 4,
           maxSubject: 8,
+          creativeAnalysis: creativeAnalysis
         })
 
       const mergeContent = (existing: string, newItems: string[]) => {
+        // If existing is empty, use only new items
+        if (!existing || existing.trim() === "") {
+          return newItems.map((s) => s.trim()).filter(Boolean).join("\n")
+        }
+        
+        // Check if existing content is just placeholder text (generic content)
+        const placeholderPatterns = [
+          "Email Preferences Team",
+          "Subscription Services", 
+          "Account Management",
+          "Communications Team",
+          "Update your email preferences",
+          "Manage your subscription settings",
+          "Quick confirmation needed: Email preferences",
+          "Review your communication preferences",
+          "One-click subscription management"
+        ]
+        
+        const isPlaceholderContent = placeholderPatterns.some(pattern => 
+          existing.includes(pattern)
+        )
+        
+        // If it's placeholder content, replace it completely with new content
+        if (isPlaceholderContent) {
+          return newItems.map((s) => s.trim()).filter(Boolean).join("\n")
+        }
+        
+        // Otherwise, merge existing and new content
         const existingLines = existing
           .split("\n")
           .map((s) => s.trim())
@@ -112,6 +206,14 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
 
       const mergedFromLines = mergeContent(fromLines, newFromLines)
       const mergedSubjectLines = mergeContent(subjectLines, newSubjectLines)
+      
+      console.log("Sample Text for AI:", sampleText)
+      console.log("Current fromLines state:", fromLines)
+      console.log("Current subjectLines state:", subjectLines)
+      console.log("Generated From Lines:", newFromLines)
+      console.log("Generated Subject Lines:", newSubjectLines)
+      console.log("Merged From Lines:", mergedFromLines)
+      console.log("Merged Subject Lines:", mergedSubjectLines)
       
       setFromLines(mergedFromLines)
       setSubjectLines(mergedSubjectLines)
@@ -211,20 +313,21 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
             <span>{Constants.fromSubjectLinesConfig.characterCount.subjectLines.replace('{count}', subjectLines.length.toString())}</span>
           </div>
 
-          {/* Generate From and Subject Lines Button - Only show for multiple creative uploads */}
-          {isMultipleCreative && (
-            <div className="pt-4">
-              <Button
-                variant="outline"
-                onClick={handleGenerateContent}
-                disabled={isGenerating}
-                className="w-full border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                {isGenerating ? "Generating..." : "Generate From & Subject Lines"}
-              </Button>
-            </div>
-          )}
+          {/* Generate From and Subject Lines Button */}
+          <div className="pt-4">
+            <Button
+              variant="outline"
+              onClick={handleGenerateContent}
+              disabled={isGenerating}
+              className="w-full border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              {isGenerating 
+                ? (uploadedFiles && uploadedFiles.length > 0 ? "Analyzing Creatives..." : "Generating...") 
+                : "Generate AI From & Subject Lines"
+              }
+            </Button>
+          </div>
         </div>
 
         {/* Footer */}

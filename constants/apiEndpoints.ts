@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   
   // Content Generation & Proofreading
   GENERATE_EMAIL_CONTENT: '/api/generate-email-content',
+  ANALYZE_CREATIVES: '/api/analyze-creatives',
   PROOFREAD: '/api/proofread',
   PROOFREAD_CREATIVE: '/api/proofread-creative',
   PROOFREAD_IMAGE: '/api/proofread-image',

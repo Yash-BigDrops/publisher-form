@@ -467,7 +467,6 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       const { fromLines: newFromLines, subjectLines: newSubjectLines } =
         await generateEmailContent({
           creativeType: creative.type || "Email",
-          notes: "",
           sampleText,
           maxFrom: 4,
           maxSubject: 8,

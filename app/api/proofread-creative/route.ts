@@ -23,33 +23,27 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const SYSTEM = `
-You are an expert editor and proofreader specializing in marketing emails with more than 10 years of experience.
+You are an expert proofreader specializing in marketing emails with more than 10 years of experience.
 Return ONLY JSON with keys: issues (array), suggestions (array), qualityScore (object).
 
 Carefully review the email creative and check the following:
 
-Grammar & Spelling:
-- Correct all grammatical mistakes, spelling errors, and awkward phrasing
-- Ensure subject-verb agreement, consistent tense usage, and correct word forms
-- Fix incorrect punctuation (commas, apostrophes, quotation marks, colons, semicolons, etc.)
-- Do not add any words that may end up in spam (Free, Act Now, 100% guarantee, etc)
-- Important: Do not confuse a normal dash (-) with an em dash (—). Use the em dash only when appropriate (for emphasis, interruption, or breaks in thought)
-- Ensure proper spacing before/after punctuation
+Spelling Only:
+- Check for spelling errors and typos ONLY
+- Do not check grammar, punctuation, or style issues
+- Focus only on incorrectly spelled words
+- Provide correct spelling suggestions for misspelled words
 
-Clarity & Readability:
-- Simplify complex sentences while keeping a persuasive, professional tone
-- Improve flow and remove redundancy
-- Ensure the message is easy to read on both desktop and mobile
-
-Tone & Style:
-- Keep the style engaging, persuasive, and aligned with marketing copy
-- Maintain brand professionalism (not too casual, not too stiff)
-- Ensure consistency in voice (e.g., "we" vs. "our team")
-
-Suggestions:
+Suggestions (Keep this feature):
 - Suggest alternate word choices if they improve impact
 - Recommend formatting improvements for scannability (shorter sentences, line breaks, bullet points if needed)
 - Highlight if the subject line or CTA could be stronger
+- Provide conversion optimization tips
+- Suggest brand alignment improvements
+
+Quality Score:
+- Grammar score should reflect spelling accuracy only
+- Other scores (readability, conversion, brandAlignment) remain as before
 
 Ignore HTML markup, focus only on the human-readable text content.
 Be concise, practical, and provide specific, actionable feedback.
@@ -92,11 +86,11 @@ Context:
 - Brand Voice: ${p.brandVoice || "n/a"}
 
 You are analyzing the TEXT CONTENT of this creative, not the HTML structure.
-Focus on the actual words, sentences, and messaging that users will read.
+Focus ONLY on spelling errors in the actual words that users will read.
 
 Output JSON shape:
 {
-  "issues": [{"icon": "⚠️","type":"Grammar Error","original":"...","correction":"...","note":"..."}],
+  "issues": [{"icon": "⚠️","type":"Spelling Error","original":"...","correction":"...","note":"..."}],
   "suggestions": [{"icon":"💡","type":"Conversion Tip","description":"..."}],
   "qualityScore": {"grammar": 0-100,"readability":0-100,"conversion":0-100,"brandAlignment":0-100}
 }
@@ -161,7 +155,7 @@ async function callOpenAIVisionJSON(imageUrl: string, context: string) {
         {
           role: "user",
           content: [
-            { type: "text", text: context + "\nAnalyze the image text, layout, and clarity. Return JSON only." },
+            { type: "text", text: context + "\nCheck the image text for spelling errors only. Also provide suggestions for conversion optimization and brand alignment. Return JSON only." },
             { type: "image_url", image_url: { url: imageUrl } },
           ],
         },
@@ -237,7 +231,7 @@ export async function POST(req: Request) {
 
         console.log("Extracted text for proofreading:", textOnly.substring(0, 200) + "...");
 
-        const prompt = `${ctx}\n\nEXTRACTED TEXT CONTENT:\n${textOnly}\n\nAnalyze this text for grammar, readability, conversion optimization, and brand alignment. Focus on the actual content, not HTML markup. Return JSON only.`;
+        const prompt = `${ctx}\n\nEXTRACTED TEXT CONTENT:\n${textOnly}\n\nCheck this text for spelling errors only. Also provide suggestions for conversion optimization and brand alignment. Focus on the actual content, not HTML markup. Return JSON only.`;
         out = coerceResp(await callAnthropicJSON(prompt)) || coerceResp(await callOpenAIJSON(prompt));
       }
     } else if (payload.fileType === "image") {

@@ -240,7 +240,6 @@ const handleStartBot = useCallback(() => {
   setHasClickedStartBot(true)
   setShowStartBot(false) 
   setVerificationError(null)
-  // Open the bot in a new tab
   window.open(TELEGRAM_BOT_URL, '_blank', 'noopener,noreferrer')
 }, [])
 

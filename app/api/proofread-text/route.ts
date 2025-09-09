@@ -31,13 +31,14 @@ export async function POST(req: NextRequest) {
     }
 
     const systemPrompt =
-      "You are a precise copy editor. Return JSON ONLY matching: " +
-      `{"corrected": string, "edits": [{"start": number, "end": number, "original": string, "suggestion": string, "reason": string, "severity": "minor"|"major"}]}` +
-      ". The indices MUST be 0-based offsets over the ORIGINAL input text. Keep meaning & claims; fix grammar/spelling/style. Use 'major' only if meaning/policy risk changes.";
+      "You are an expert proofreader. Check the given text carefully for spelling errors. For each error, provide the incorrect word and the corrected suggestion. If no spelling mistakes are found, simply return the phrase: 'no error found'. " +
+      "Return JSON ONLY matching: " +
+      `{"errors": [{"word": "string", "suggestion": "string"}], "if_no_errors": "no error found"}` +
+      ". Focus ONLY on spelling mistakes, not grammar or style issues.";
 
     const userPrompt =
       `Input text:\n${text}\n\n` +
-      "Find issues and propose minimal fixes. Keep indices aligned to the ORIGINAL input string.";
+      "Check this text for spelling errors only. Return the specified JSON format.";
 
     const msg = await anthropic.messages.create({
       model: MODEL,
@@ -48,13 +49,20 @@ export async function POST(req: NextRequest) {
     });
 
     const raw = (msg.content?.[0] as { text?: string })?.text ?? "";
-    const result = safeParseJson<ProofreadResult>(raw, { corrected: text, edits: [] });
+    const spellingResult = safeParseJson<{errors: Array<{word: string, suggestion: string}>, if_no_errors?: string}>(raw, { errors: [] });
 
-    result.edits = (result.edits || []).filter(e =>
-      Number.isFinite(e.start) && Number.isFinite(e.end) &&
-      e.start >= 0 && e.end >= e.start && e.end <= text.length &&
-      typeof e.original === "string" && typeof e.suggestion === "string"
-    );
+    // Convert spelling errors to the existing ProofreadResult format for compatibility
+    const result: ProofreadResult = {
+      corrected: text,
+      edits: spellingResult.errors?.map((error, index) => ({
+        start: text.indexOf(error.word),
+        end: text.indexOf(error.word) + error.word.length,
+        original: error.word,
+        suggestion: error.suggestion,
+        reason: "Spelling error",
+        severity: "minor" as const
+      })) || []
+    };
 
     return NextResponse.json(result);
   } catch (e) {

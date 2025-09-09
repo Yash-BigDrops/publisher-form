@@ -78,13 +78,13 @@ export const Constants = {
             label: "From Lines",
             name: "fromLines",
             type: "textarea",
-            placeholder: "Enter From Lines",
+            placeholder: "John Smith\nSarah Johnson\nMarketing Team\nNewsletter Updates",
         },
         {
             label: "Subject Lines",
             name: "subjectLines",
             type: "textarea",
-            placeholder: "Enter Subject Lines",
+            placeholder: "Your exclusive offer is here\nDon't miss this limited-time deal\nSpecial announcement inside\nImportant update for you",
         },
     ],
 
@@ -158,13 +158,13 @@ export const Constants = {
         },
         fromLines: {
             label: "From Lines *",
-            placeholder: "Enter from lines",
+            placeholder: "John Smith\nSarah Johnson\nMarketing Team\nNewsletter Updates",
             helpText: "Enter multiple from lines separated by line breaks. Each line will be used as an option.",
             required: true
         },
         subjectLines: {
             label: "Subject Lines *",
-            placeholder: "Enter subject lines",
+            placeholder: "Your exclusive offer is here\nDon't miss this limited-time deal\nSpecial announcement inside\nImportant update for you",
             helpText: "Enter multiple subject lines separated by line breaks. Each line will be used as an option.",
             required: true
         },

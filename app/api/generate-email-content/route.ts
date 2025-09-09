@@ -6,10 +6,17 @@ type Req = {
   brandVoice?: string;
   industry?: string;
   campaignGoal?: string;
-  notes?: string;
   sampleText?: string;
   maxFrom?: number;
   maxSubject?: number;
+  creativeAnalysis?: {
+    extractedText: string;
+    imageDescriptions: string[];
+    htmlContent: string;
+    fileCount: number;
+    creativeTypes: string[];
+    contentType: string;
+  };
 };
 
 type Resp = {
@@ -20,14 +27,22 @@ type Resp = {
 export const dynamic = "force-dynamic";
 
 const SYS_INSTRUCTIONS = `
-You generate high-performing "From" lines and Subject lines for email campaigns.
-Return STRICT JSON ONLY with keys: fromLines (string[]), subjectLines (string[]).
-Do not include commentary.
-Rules:
-- Make From lines look like real people/brands (avoid spammy ALL CAPS).
-- Subject lines: concise, curiosity-driven, 35–55 chars when possible, no clickbait.
-- Avoid spam trigger words (free!!!, winner, guarantee).
-- Tailor tone to brandVoice and audience. 
+You are an expert email marketer. Generate only high-performing From lines and Subject lines for email campaigns. 
+Return STRICT JSON with keys: fromLines (string[]), subjectLines (string[]). 
+
+Requirements:
+- From lines must look authentic (real people or credible brands), no spammy ALL CAPS or fake names.
+- Subject lines must be concise, curiosity-driven, professional, ideally 35–55 characters.
+- Do not use clickbait or spam trigger words (e.g., free, winner, guarantee).
+- Ensure tone matches the given brandVoice and audience.
+- Do not include commentary, explanation, or extra keys in the output.
+
+Content Analysis Guidelines:
+- For HTML with TEXT ONLY: Extract and analyze the written content, headlines, and messaging
+- For HTML with IMAGE ONLY: Focus on image descriptions, alt text, and visual context
+- For HTML with BOTH TEXT and IMAGE: Combine text analysis with image context for comprehensive understanding
+- For IMAGES: Use filename, alt text, and visual descriptions to understand the creative intent
+- Base recommendations on the actual creative content and messaging tone
 `;
 
 function buildUserPrompt(payload: Req) {
@@ -37,11 +52,39 @@ function buildUserPrompt(payload: Req) {
     brandVoice = "",
     industry = "",
     campaignGoal = "",
-    notes = "",
     sampleText = "",
     maxFrom = 5,
     maxSubject = 10,
+    creativeAnalysis,
   } = payload;
+
+  let creativeContext = "";
+  if (creativeAnalysis) {
+    // Determine content type based on analysis
+    const hasText = creativeAnalysis.extractedText.trim().length > 0;
+    const hasImages = creativeAnalysis.imageDescriptions.length > 0;
+    const hasHtmlContent = creativeAnalysis.htmlContent.trim().length > 0;
+    
+    let contentType = "Unknown";
+    if (hasText && hasImages) {
+      contentType = "HTML with BOTH TEXT and IMAGE";
+    } else if (hasText && !hasImages) {
+      contentType = "HTML with TEXT ONLY";
+    } else if (!hasText && hasImages) {
+      contentType = "HTML with IMAGE ONLY";
+    } else if (creativeAnalysis.creativeTypes.includes("image")) {
+      contentType = "IMAGES";
+    }
+
+    creativeContext = `
+Creative Analysis (${creativeAnalysis.fileCount} files analyzed):
+- Content Type: ${contentType}
+- File Types: ${creativeAnalysis.creativeTypes.join(", ")}
+- Extracted Text: ${creativeAnalysis.extractedText.substring(0, 1000)}${creativeAnalysis.extractedText.length > 1000 ? "..." : ""}
+- Key Elements: ${creativeAnalysis.htmlContent.substring(0, 500)}${creativeAnalysis.htmlContent.length > 500 ? "..." : ""}
+- Images: ${creativeAnalysis.imageDescriptions.join(", ")}
+`;
+  }
 
   return `
 Context:
@@ -50,13 +93,19 @@ Context:
 - Brand Voice: ${brandVoice || "n/a"}
 - Industry: ${industry || "n/a"}
 - Campaign Goal: ${campaignGoal || "n/a"}
-- Extra Notes: ${notes || "n/a"}
+
+${creativeContext}
 
 Sample Creative/Text (optional):
 ${sampleText || "n/a"}
 
 Requirements:
 - Generate up to ${maxFrom} From lines and up to ${maxSubject} Subject lines.
+- Base recommendations on the analyzed creative content when available.
+- For TEXT content: Extract key messaging, headlines, and call-to-action language
+- For IMAGE content: Use visual context, alt text, and image descriptions
+- For MIXED content: Combine text analysis with visual context for comprehensive understanding
+- Ensure From lines and Subject lines align with the creative's tone and messaging.
 - Output JSON: {"fromLines": [...], "subjectLines": [...]}
 `;
 }

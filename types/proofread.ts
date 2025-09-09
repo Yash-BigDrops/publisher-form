@@ -32,3 +32,13 @@ export interface ProofreadRequest {
   language?: string;
   focus?: 'spelling' | 'grammar' | 'style' | 'all';
 }
+
+export interface SpellingError {
+  word: string;
+  suggestion: string;
+}
+
+export interface SpellingCheckResult {
+  errors: SpellingError[];
+  if_no_errors?: string;
+}

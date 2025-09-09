@@ -32,13 +32,13 @@ export async function POST(req: NextRequest) {
     }
 
     const system =
-      "You are a precise OCR + copy editor for ads. Extract all user-facing ad text from the image (ignore UI chrome, nav, boilerplate), then proofread it. " +
-      'Return JSON ONLY: {"corrected": string, "edits": [{"start": number, "end": number, "original": string, "suggestion": string, "reason": string, "severity": "minor"|"major"}]}. ' +
-      "Indices must reference the extracted text string.";
+      "You are an expert proofreader with OCR capabilities. Extract all user-facing ad text from the image (ignore UI chrome, nav, boilerplate), then check for spelling errors only. " +
+      'Return JSON ONLY: {"errors": [{"word": "string", "suggestion": "string"}], "if_no_errors": "no error found"}. ' +
+      "Focus ONLY on spelling mistakes, not grammar or style issues.";
 
     const userText =
       "Extract headline, subheads, body, CTA. Preserve helpful line breaks. " +
-      "Then proofread for clarity, spelling, grammar. Keep brand claims. Be concise. 'major' only for meaning/policy-risk changes. Return JSON ONLY.";
+      "Then check the extracted text for spelling errors only. Return the specified JSON format.";
 
     const resp = await openai.chat.completions.create({
       model: MODEL,
@@ -54,14 +54,19 @@ export async function POST(req: NextRequest) {
     });
 
     const raw = resp.choices[0]?.message?.content ?? "";
-    const result = safeParseJson<ProofreadResult>(raw, { corrected: "", edits: [] });
+    const spellingResult = safeParseJson<{errors: Array<{word: string, suggestion: string}>, if_no_errors?: string}>(raw, { errors: [] });
 
-    const base = result.corrected || "";
-    result.edits = (result.edits || []).filter(e =>
-      Number.isFinite(e.start) && Number.isFinite(e.end) &&
-      e.start >= 0 && e.end >= e.start && e.end <= base.length &&
-      typeof e.original === "string" && typeof e.suggestion === "string"
-    );
+    const result: ProofreadResult = {
+      corrected: "",
+      edits: spellingResult.errors?.map((error) => ({
+        start: 0, 
+        end: error.word.length,
+        original: error.word,
+        suggestion: error.suggestion,
+        reason: "Spelling error",
+        severity: "minor" as const
+      })) || []
+    };
 
     return NextResponse.json(result);
   } catch (e) {
