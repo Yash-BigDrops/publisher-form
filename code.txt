@@ -12,3 +12,78 @@ Changes made to components/modals/SingleCreativeView.tsx and components/modals/M
    - ESC key now acts same as "Save and Continue" button
 
 Both components now support ESC key press to save and close the modal, providing better keyboard accessibility and user experience.
+
+---
+
+COMPREHENSIVE SECURITY HARDENING IMPLEMENTED
+
+Security measures added to protect against common web vulnerabilities:
+
+1. Security Headers (next.config.ts):
+   - Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+   - X-Frame-Options: DENY
+   - X-Content-Type-Options: nosniff
+   - Referrer-Policy: strict-origin-when-cross-origin
+   - Permissions-Policy: camera=(), microphone=(), geolocation=()
+   - Content-Security-Policy-Report-Only: Comprehensive CSP policy
+
+2. CSRF Protection (app/lib/security/csrf.ts):
+   - Double-submit cookie pattern implementation
+   - 32-byte random token generation
+   - Timing-safe token comparison
+   - HttpOnly, Secure, SameSite cookie attributes
+
+3. Server-Side Validation (app/lib/security/validation.ts):
+   - Zod schemas for all form fields
+   - Affiliate ID: 3-20 chars, alphanumeric with hyphens/underscores
+   - Company Name: 2-100 characters
+   - Names: 1-50 chars, letters/spaces/hyphens/apostrophes only
+   - Comprehensive error handling with field-level validation
+
+4. CORS Security (app/lib/security/cors.ts):
+   - Strict allowlist-based origin validation
+   - Environment variable configuration (ALLOWED_ORIGINS)
+   - Proper OPTIONS handling
+   - Credentials support with origin validation
+
+5. Rate Limiting (middleware.ts):
+   - Edge middleware for sensitive routes (/form/submit, /api/*)
+   - 30 requests per 60 seconds per IP
+   - 429 responses with Retry-After header
+   - In-memory store (upgradeable to Vercel KV)
+
+6. File Upload Security (app/api/uploads/presign/route.ts):
+   - Presigned URL approach (no direct server uploads)
+   - 5MB size limit enforcement
+   - MIME type allowlist validation
+   - Randomized filename generation
+   - Environment variable configuration (ALLOWED_MIME)
+
+7. Form Implementation (app/form/page.tsx, app/form/submit/route.ts):
+   - CSRF token integration in forms
+   - Server-side validation enforcement
+   - Proper error handling and responses
+   - Client-side validation for UX
+
+8. Testing Infrastructure:
+   - Vitest configuration with Playwright
+   - Comprehensive security test suite
+   - Header validation tests
+   - CSRF protection tests
+   - Rate limiting tests
+   - CORS policy tests
+   - File upload security tests
+
+9. Documentation:
+   - SECURITY.md: Comprehensive security guide
+   - README.md: Updated with security features
+   - Environment variable documentation
+   - Deployment checklist
+   - CSP migration guide
+
+10. Scripts and Tools:
+    - check-headers.sh: Bash script for header validation
+    - check-headers.ps1: PowerShell script for Windows
+    - Package.json scripts for testing and validation
+
+All security measures follow OWASP guidelines and industry best practices for web application security.
