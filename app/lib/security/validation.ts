@@ -39,7 +39,7 @@ export function validateFormData(data: FormData): { success: true; data: FormDat
     return { success: true, data: parsedData };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const fieldErrors = error.issues.reduce((acc, err) => {
+      const fieldErrors = error.errors.reduce((acc, err) => {
         const field = err.path.join('.');
         acc[field] = err.message;
         return acc;
