@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     };
     
     // Verify CSRF token
-    if (!verifyCsrfToken(data.csrf_token)) {
+    if (!(await verifyCsrfToken(data.csrf_token))) {
       return csrfErrorResponse();
     }
     
@@ -25,12 +25,15 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(validation.errors);
     }
     
+    // Use validated data
+    const validatedData = validation.data;
+    
     // Process the form data (replace with actual business logic)
     console.log('Form submitted successfully:', {
-      affiliateId: data.affiliateId,
-      companyName: data.companyName,
-      firstName: data.firstName,
-      lastName: data.lastName
+      affiliateId: validatedData.affiliateId,
+      companyName: validatedData.companyName,
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName
     });
     
     return NextResponse.json(

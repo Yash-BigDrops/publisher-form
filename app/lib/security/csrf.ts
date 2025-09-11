@@ -5,10 +5,10 @@ import crypto from 'crypto';
 const CSRF_COOKIE_NAME = 'csrf';
 const CSRF_TOKEN_LENGTH = 32;
 
-export function createCsrfToken(): string {
+export async function createCsrfToken(): Promise<string> {
   const token = crypto.randomBytes(CSRF_TOKEN_LENGTH).toString('hex');
   
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.set(CSRF_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -20,12 +20,12 @@ export function createCsrfToken(): string {
   return token;
 }
 
-export function verifyCsrfToken(formToken: string | null): boolean {
+export async function verifyCsrfToken(formToken: string | null): Promise<boolean> {
   if (!formToken) {
     return false;
   }
   
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const cookieToken = cookieStore.get(CSRF_COOKIE_NAME)?.value;
   
   if (!cookieToken) {

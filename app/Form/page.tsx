@@ -1,7 +1,7 @@
 import { createCsrfToken } from '@/app/lib/security/csrf';
 
-export default function FormPage() {
-  const csrfToken = createCsrfToken();
+export default async function FormPage() {
+  const csrfToken = await createCsrfToken();
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

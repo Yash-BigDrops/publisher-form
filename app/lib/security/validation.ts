@@ -33,12 +33,13 @@ export const formSchema = z.object({
 
 export type FormData = z.infer<typeof formSchema>;
 
-export function validateFormData(data: FormData) {
+export function validateFormData(data: FormData): { success: true; data: FormData } | { success: false; errors: Record<string, string> } {
   try {
-    return formSchema.parse(data);
+    const parsedData = formSchema.parse(data);
+    return { success: true, data: parsedData };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const fieldErrors = error.errors.reduce((acc, err) => {
+      const fieldErrors = error.issues.reduce((acc, err) => {
         const field = err.path.join('.');
         acc[field] = err.message;
         return acc;
