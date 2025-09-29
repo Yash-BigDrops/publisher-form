@@ -28,13 +28,42 @@ export async function POST(request: NextRequest) {
     // Use validated data
     const validatedData = validation.data;
     
-    // Process the form data (replace with actual business logic)
-    console.log('Form submitted successfully:', {
+    // Process the form data and send to webhook
+    const submissionData = {
       affiliateId: validatedData.affiliateId,
       companyName: validatedData.companyName,
       firstName: validatedData.firstName,
-      lastName: validatedData.lastName
+      lastName: validatedData.lastName,
+      submittedAt: new Date().toISOString()
+    };
+
+    // Send data to admin portal webhook
+    if (!process.env.ADMIN_PORTAL_URL || !process.env.ADMIN_API_TOKEN) {
+      console.error('Missing webhook configuration');
+      return NextResponse.json(
+        { error: 'Webhook configuration missing' },
+        { status: 500 }
+      );
+    }
+
+    const response = await fetch(process.env.ADMIN_PORTAL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.ADMIN_API_TOKEN}`,
+      },
+      body: JSON.stringify(submissionData),
     });
+
+    if (!response.ok) {
+      console.error('Webhook call failed:', response.status, response.statusText);
+      return NextResponse.json(
+        { error: 'Failed to submit form data' },
+        { status: 500 }
+      );
+    }
+
+    console.log('Form submitted successfully and sent to webhook');
     
     return NextResponse.json(
       { 
