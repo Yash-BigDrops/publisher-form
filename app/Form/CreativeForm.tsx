@@ -152,72 +152,8 @@ const CreativeForm = () => {
 
     setIsSubmitting(true);
     try {
-      // TODO: Backend Developer - Implement complete submission workflow
-      //
-      // 1. API Endpoint: POST /api/creative/save
-      //    - Validate all form data and file uploads
-      //    - Store creative submission in database
-      //    - Generate unique submission ID and tracking number
-      //    - Handle file metadata and storage references
-      //
-      // 2. Database Schema Required:
-      //    - Creative submissions table with status tracking
-      //    - File metadata table linked to submissions
-      //    - User/affiliate information storage
-      //    - Submission history and audit trail
-      //
-      // 3. Email Functionality Required:
-      //    - Send confirmation email with submission details
-      //    - Include tracking URL and submission ID
-      //    - Email template with professional branding
-      //    - Support for multiple email providers (SendGrid, AWS SES, etc.)
-      //
-      // 4. Redirection Logic Required:
-      //    - Redirect to /thankyou page with submission type and count
-      //    - Pass URL parameters: ?type=single|multiple&count=X
-      //    - Store submission data in localStorage as fallback
-      //    - Handle both success and error scenarios
-      //
-      // 5. Submission Data Structure:
-      //    {
-      //      submissionId: string,        // Unique identifier
-      //      trackingNumber: string,      // Human-readable tracking code
-      //      submissionType: 'single' | 'multiple' | 'fromSubjectLines',
-      //      fileCount: number,           // Number of files submitted
-      //      status: 'pending' | 'reviewing' | 'approved' | 'rejected',
-      //      createdAt: Date,
-      //      estimatedReviewTime: string, // e.g., "24-48 hours"
-      //      redirectUrl: string          // URL to redirect after submission
-      //    }
-      //
-      // 6. Error Handling Required:
-      //    - Validation errors (form data, file types, sizes)
-      //    - Database connection issues
-      //    - Email service failures
-      //    - File storage problems
-      //    - Rate limiting and spam prevention
-      //
-      // 7. Security Considerations:
-      //    - Input sanitization and validation
-      //    - File type and size restrictions
-      //    - Rate limiting per user/IP
-      //    - CSRF protection
-      //    - Data encryption for sensitive information
-      //
-      // 8. Performance Optimizations:
-      //    - Async file processing for large uploads
-      //    - Database connection pooling
-      //    - Email queuing for high-volume submissions
-      //    - Caching for frequently accessed data
-      //
-      // 9. Monitoring and Logging:
-      //    - Track submission success/failure rates
-      //    - Monitor email delivery status
-      //    - Log user actions for audit purposes
-      //    - Performance metrics collection
-      //
-      // Current implementation - Replace with backend logic:
-      const response = await fetch(API_ENDPOINTS.CREATIVE_SAVE, {
+  
+      const response = await fetch('/api/submit-to-admin', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -229,16 +165,8 @@ const CreativeForm = () => {
           telegramId: formData.telegramId,
           offerId: formData.offerId,
           creativeType: formData.creativeType,
-          fromLines: formData.fromLines,
-          subjectLines: formData.subjectLines,
-          notes: formData.additionalNotes,
+          additionalNotes: formData.additionalNotes,
           priority: formData.priority,
-          files: files.map((f) => ({
-            fileName: f.name,
-            fileUrl: f.url,
-            fileType: f.type,
-            fileSize: f.size,
-          })),
         }),
       });
 
