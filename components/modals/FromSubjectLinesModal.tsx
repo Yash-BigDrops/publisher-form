@@ -34,7 +34,6 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   onSave,
   initialFromLines = '',
   initialSubjectLines = '',
-  isMultipleCreative = false,
   uploadedFiles = [],
   creativeType = 'email',
   offerId = ''
@@ -47,23 +46,43 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   // Prevent background scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden'
+      // Store current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = "fixed";
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = "100%";
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = 'unset'
+      // Restore scroll position and body styles
+      const scrollY = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || "0") * -1);
+      }
     }
 
     // Cleanup function to restore scrolling when component unmounts
     return () => {
-      document.body.style.overflow = 'unset'
-    }
+      const scrollY = document.body.style.top;
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || "0") * -1);
+      }
+    };
   }, [isOpen])
 
   // Update state when modal opens with initial values
   useEffect(() => {
     if (isOpen) {
-      // Always start with empty content to avoid showing placeholder text as actual content
-      setFromLines("")
-      setSubjectLines("")
+      // Load initial values if they exist, otherwise start with empty content
+      setFromLines(initialFromLines || "")
+      setSubjectLines(initialSubjectLines || "")
       setErrors({})
     }
   }, [isOpen, initialFromLines, initialSubjectLines])
@@ -230,8 +249,8 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-color-border">
           <div className="flex items-center gap-3">
@@ -313,21 +332,23 @@ const FromSubjectLinesModal: React.FC<FromSubjectLinesModalProps> = ({
             <span>{Constants.fromSubjectLinesConfig.characterCount.subjectLines.replace('{count}', subjectLines.length.toString())}</span>
           </div>
 
-          {/* Generate From and Subject Lines Button */}
-          <div className="pt-4">
-            <Button
-              variant="outline"
-              onClick={handleGenerateContent}
-              disabled={isGenerating}
-              className="w-full border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Sparkles className="h-4 w-4 mr-2" />
-              {isGenerating 
-                ? (uploadedFiles && uploadedFiles.length > 0 ? "Analyzing Creatives..." : "Generating...") 
-                : "Generate AI From & Subject Lines"
-              }
-            </Button>
-          </div>
+          {/* Generate From and Subject Lines Button - Only show if there are uploaded files */}
+          {uploadedFiles && uploadedFiles.length > 0 && (
+            <div className="pt-4">
+              <Button
+                variant="outline"
+                onClick={handleGenerateContent}
+                disabled={isGenerating}
+                className="w-full border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {isGenerating 
+                  ? "Analyzing Creatives..." 
+                  : "Generate AI From & Subject Lines"
+                }
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

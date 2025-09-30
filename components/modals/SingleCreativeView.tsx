@@ -43,6 +43,7 @@ interface SingleCreativeViewProps {
   };
   onFileNameChange?: (fileId: string, newFileName: string) => void;
   showAdditionalNotes?: boolean; // New prop to control Additional Notes visibility
+  creativeType?: string; // Add creative type prop to control Email Content visibility
 }
 
 const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
@@ -51,6 +52,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   creative,
   onFileNameChange,
   showAdditionalNotes = false,
+  creativeType = "email", // Default to email for backward compatibility
 }) => {
   const [editableFileName, setEditableFileName] = useState(creative.name);
   const [editableNameOnly, setEditableNameOnly] = useState(() => {
@@ -128,13 +130,19 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = "100%";
       document.body.style.overflow = "hidden";
+      
+      // Additional prevention methods
+      document.body.style.height = "100%";
+      document.documentElement.style.overflow = "hidden";
     } else {
       // Restore scroll position and body styles
       const scrollY = document.body.style.top;
       document.body.style.position = "";
       document.body.style.top = "";
       document.body.style.width = "";
+      document.body.style.height = "";
       document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
       if (scrollY) {
         window.scrollTo(0, parseInt(scrollY || "0") * -1);
       }
@@ -146,7 +154,9 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       document.body.style.position = "";
       document.body.style.top = "";
       document.body.style.width = "";
+      document.body.style.height = "";
       document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
       if (scrollY) {
         window.scrollTo(0, parseInt(scrollY || "0") * -1);
       }
@@ -317,7 +327,13 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       onClose();
     } catch (error) {
       console.error("Failed to save creative data:", error);
-      // Show error feedback (you can add a toast notification here)
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "Failed to save creative data";
+      alert(`Error: ${errorMessage}`);
+      
+      // Don't close the modal on error, let user try again
+      // onClose();
     } finally {
       setIsSaving(false);
     }
@@ -512,8 +528,14 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       console.log("Content generation completed successfully");
     } catch (error) {
       console.error("Content generation failed:", error);
-      setFromLines("Failed to generate content. Please try again.");
-      setSubjectLines("Failed to generate content. Please try again.");
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate content";
+      alert(`Error: ${errorMessage}`);
+      
+      // Don't overwrite existing content with error message
+      // setFromLines("Failed to generate content. Please try again.");
+      // setSubjectLines("Failed to generate content. Please try again.");
     } finally {
       setIsGeneratingContent(false);
     }
@@ -641,7 +663,10 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       console.log("HTML saved successfully");
     } catch (error) {
       console.error("Failed to save HTML:", error);
-      // Show error feedback (you can add a toast notification here)
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "Failed to save HTML";
+      alert(`Error: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }
@@ -671,7 +696,16 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleSaveAll();
+        }
+      }}
+      onWheel={(e) => e.preventDefault()}
+      onTouchMove={(e) => e.preventDefault()}
+    >
       <div className="bg-white w-full h-full flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header with File Details - Left-Right Layout */}
         <div className="flex items-center justify-between p-3 sm:p-4 lg:p-6 border-b border-color-border bg-gray-50 gap-3 sm:gap-4 lg:gap-6">
@@ -984,7 +1018,8 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                   </div>
                 )}
 
-                {/* Email Content Group */}
+                {/* Email Content Group - Only show for email creative type */}
+                {creativeType === 'email' && (
                 <div className="p-4 sm:p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-4 border-b border-gray-200 mb-4 gap-3 sm:gap-0">
                     <div className="flex items-center gap-3">
@@ -1068,6 +1103,7 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Proofreading Container - LLM-based proofreading implemented with /api/proofread-creative */}
                 <div className="p-4 sm:p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -1276,7 +1312,11 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
 
       {/* Fullscreen HTML Editor Modal */}
       {isHtmlEditorFullscreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200"
+          onWheel={(e) => e.preventDefault()}
+          onTouchMove={(e) => e.preventDefault()}
+        >
           <div className="bg-white w-full h-full flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             {/* Fullscreen Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200 gap-3 sm:gap-0">
@@ -1368,7 +1408,11 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
 
       {/* Fullscreen HTML Preview Modal */}
       {isHtmlPreviewFullscreen && isHtml && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[60] animate-in fade-in duration-200"
+          onWheel={(e) => e.preventDefault()}
+          onTouchMove={(e) => e.preventDefault()}
+        >
           <div className="bg-white w-full h-full flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
             {/* Fullscreen Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 sm:p-6 border-b border-gray-200 gap-3 sm:gap-0">
@@ -1414,7 +1458,11 @@ const SingleCreativeView: React.FC<SingleCreativeViewProps> = ({
       {isImagePreviewFullscreen &&
         isImage &&
         (creative.previewUrl || creative.url) && (
-        <div className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-[60] animate-in fade-in duration-200"
+          onWheel={(e) => e.preventDefault()}
+          onTouchMove={(e) => e.preventDefault()}
+        >
           <div className="relative w-full h-full flex items-center justify-center">
             {/* Exit Fullscreen Button */}
             <Button

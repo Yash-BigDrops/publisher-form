@@ -12,3 +12,167 @@ Changes made to components/modals/SingleCreativeView.tsx and components/modals/M
    - ESC key now acts same as "Save and Continue" button
 
 Both components now support ESC key press to save and close the modal, providing better keyboard accessibility and user experience.
+
+Background Styling Update for FromSubjectLinesModal.tsx:
+
+- Added backdrop-blur-sm class for blurred background effect
+- Added animate-in fade-in duration-200 for smooth backdrop animation
+- Added animate-in zoom-in-95 duration-200 for modal content animation
+- Now matches the visual styling of other modals in the project
+
+Constants.ts Placeholder Text Update:
+
+- Updated From Lines placeholder in both formFields and fromSubjectLinesConfig to use helpText: "Enter multiple from lines separated by line breaks. Each line will be used as an option."
+- Updated Subject Lines placeholder in both formFields and fromSubjectLinesConfig to use helpText: "Enter multiple subject lines separated by line breaks. Each line will be used as an option."
+- Provides clearer guidance to users about how to format their input
+- Fixed issue where FromSubjectLinesModal was using fromSubjectLinesConfig placeholders instead of formFields placeholders
+
+FromSubjectLinesModal Conditional Generate Button:
+
+- Added conditional rendering for the "Generate AI From & Subject Lines" button
+- Button only appears when uploadedFiles array has content (length > 0)
+- When opened directly (no files uploaded), users can only manually enter from/subject lines
+- When opened after file upload, users can both manually enter and generate AI content
+- SingleCreativeView already has its own generate functionality for individual creatives
+
+Background Scrolling Prevention Standardization:
+
+- Updated FromSubjectLinesModal to use the same robust background scrolling prevention as other modals
+- All modals now use position: fixed with scroll position preservation
+- Prevents background scrolling when any modal is open
+- Maintains scroll position when modal closes
+- Consistent behavior across all modal components (FileUploadModal, FromSubjectLinesModal, SingleCreativeView, MultipleCreativeView)
+
+SingleCreativeView Enhanced Scrolling Prevention:
+
+- Added additional scrolling prevention methods: document.body.style.height = "100%" and document.documentElement.style.overflow = "hidden"
+- Added onWheel and onTouchMove event prevention to all modal overlays (main modal and fullscreen modals)
+- Added click-to-close functionality on backdrop (calls handleSaveAll)
+- Enhanced prevention for both desktop (wheel) and mobile (touch) scrolling
+- Covers all fullscreen modal overlays (HTML Editor, HTML Preview, Image Preview)
+
+Error Handling Improvements:
+
+- Enhanced saveCreativeMetadata function in lib/creativeClient.ts to parse server error responses and provide detailed error messages
+- Improved error handling in SingleCreativeView handleSaveAll function with user-friendly alert messages
+- Enhanced error handling in handleSaveHtml and handleGenerateContent functions
+- Prevents Next.js error overlay by properly catching and handling errors
+- Users now see specific error messages instead of generic "Save metadata failed" errors
+- Modal stays open on error to allow users to retry the operation
+
+Creative Type Change Confirmation:
+
+- Added confirmation dialog when user changes creative type after uploading files
+- Dialog warns user that changing creative type will delete all uploaded creatives
+- User must confirm to proceed with creative type change
+- If user cancels, creative type remains unchanged
+- If user confirms, all uploaded files and errors are cleared
+- Prevents accidental loss of uploaded content when changing creative type
+
+Custom Confirmation Modal:
+
+- Created reusable ConfirmationModal component in components/modals/ConfirmationModal.tsx
+- Replaced native browser confirm dialog with custom modal for better UX
+- Modal includes warning icon, clear title, and descriptive message
+- Supports different types: warning, danger, info with appropriate styling
+- Customizable confirm and cancel button text
+- Includes background scrolling prevention and smooth animations
+- Added to modals index.ts for easy importing
+- Integrated into CreativeDetails component for creative type change confirmation
+
+Confirmation Modal Styling Improvements:
+
+- Enhanced title styling with larger font (text-xl) and bold weight for better prominence
+- Improved message typography with proper paragraph spacing and hierarchy
+- First paragraph of message is styled with font-medium and darker color for emphasis
+- Larger warning icon (h-6 w-6) with increased padding for better visual impact
+- Better visual separation between title and description content
+- Improved readability with proper line spacing and color contrast
+
+From & Subject Lines Email-Only Visibility:
+
+- Added email type condition to uploaded from/subject lines display section
+- All From & Subject Lines UI elements now only show when creativeType is 'email'
+- When changing creative type away from email, from/subject lines are automatically cleared
+- Prevents confusion by hiding email-specific functionality for non-email creative types
+- Maintains data integrity by clearing irrelevant data when switching creative types
+
+SingleCreativeView Email Content Conditional Display:
+
+- Added creativeType prop to SingleCreativeView component interface
+- Email Content section (From Lines & Subject Lines) now only displays when creativeType is 'email'
+- Updated MultipleCreativeView to accept and pass through creativeType prop
+- Updated CreativeDetails to pass formData.creativeType to both SingleCreativeView and MultipleCreativeView
+- Ensures consistent behavior across all modal views regardless of creative type
+- Prevents email-specific functionality from appearing for non-email creative types
+
+Tracking Page with Navbar and Submission Details:
+
+- Created reusable Navbar component with logo on left and submission ID on right
+- Updated [trackingId]/page.tsx to match thankyou page structure and styling
+- Added SubmissionDetails component showing filename, filetype, and filesize for each creative
+- Implemented status tracking with same visual design as thankyou page
+- Added contact support button in action buttons section
+- Added loading states and error handling for missing submissions
+- Mock data structure for demonstration (replace with actual API calls)
+- Responsive design with desktop horizontal and mobile vertical layouts
+- Consistent styling with thankyou page using same background and card design
+
+Refined Tracking Page Layout:
+
+- Changed background to clean white (removed background image)
+- Implemented two-column layout: left column for details, right column for tracking
+- Left column contains: header card, submission details, important information, contact support button
+- Right column contains: vertical status tracker with connection lines between steps
+- Status tracker now uses vertical layout only with connecting lines between status items
+- Removed "Submit Another Creative" button, kept only "Contact Support" button
+- Improved card styling with consistent shadows and borders
+- Better responsive design that works on all screen sizes
+- Clean, professional appearance with proper spacing and typography
+
+Fixed TypeScript and Linter Errors:
+
+- Added proper TypeScript interfaces for Creative and SubmissionData types
+- Fixed IconComponent JSX rendering with proper null checking
+- Removed unused imports (PencilLine, Separator, Image, Constants)
+- Fixed HTML entity escaping for quotes in error messages
+- Added proper type annotations for all state variables and function parameters
+- Ensured type safety throughout the component with proper interface definitions
+- All linter errors resolved and code is now fully type-safe
+
+Navbar Enhancement and Simplified Heading:
+
+- Enhanced Navbar component to include lastUpdated prop and display
+- Added last updated timestamp next to submission ID in navbar
+- Last updated info shows in a separate gray badge with proper formatting
+- Simplified main heading to "Track Your Creative Submission" (static text)
+- Removed last updated message from header card since it's now in navbar
+- Cleaner header design with consistent information placement
+- Better user experience with key information always visible in navbar
+
+Intelligent Accordion Tracking System:
+
+- Created scalable accordion-based tracking system with expandable cards
+- Dynamic status determination based on submission data status field
+- Support for multiple status types: submitted, under_review, feedback_required, revision_needed, approved, completed
+- Visual indicators: active (blue), completed (green), pending (gray), action required (amber)
+- Expandable cards show detailed information when clicked
+- Action-required cards highlight with amber color and "Action Required" badge
+- Feedback section displays specific feedback when status requires revision
+- Resubmission functionality with "Upload Revised Creative" button
+- Contact support button available in action cards
+- Status details section shows technical information
+- Scalable design allows easy addition of new status types
+- Intelligent state management with expand/collapse functionality
+- Connection lines between status steps for visual flow
+- Timestamp display for each status with proper formatting
+- Mock data system for testing different status scenarios
+
+FromSubjectLinesModal Save Issue Fix:
+
+- Fixed critical bug where From & Subject Lines were not being saved and displayed when reopening modal
+- Issue was in useEffect that always reset fromLines and subjectLines to empty strings on modal open
+- Updated useEffect to properly load initialFromLines and initialSubjectLines props when modal opens
+- Now when user saves from/subject lines and reopens modal, previously saved values are displayed
+- Maintains backward compatibility - still shows empty fields when no initial values provided
+- Fixes the core functionality where users could not see their previously entered from/subject lines

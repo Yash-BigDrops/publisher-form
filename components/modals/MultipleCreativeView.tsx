@@ -27,6 +27,7 @@ interface MultipleCreativeViewProps {
   zipFileName?: string;
   onRemoveCreative?: (creativeId: string) => void;
   onFileNameChange?: (fileId: string, newFileName: string) => void;
+  creativeType?: string; // Add creative type prop to control Email Content visibility
 }
 
 const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
@@ -36,6 +37,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
   zipFileName,
   onRemoveCreative,
   onFileNameChange,
+  creativeType = "email", // Default to email for backward compatibility
 }) => {
   const [currentCreativeIndex, setCurrentCreativeIndex] = useState(0);
   const [isHtmlEditorFullscreen, setIsHtmlEditorFullscreen] = useState(false);
@@ -581,6 +583,7 @@ const MultipleCreativeView: React.FC<MultipleCreativeViewProps> = ({
           creative={selectedCreative}
           onFileNameChange={handleFileNameChangeFromSingle}
           showAdditionalNotes={true}
+          creativeType={creativeType}
         />
       )}
     </div>

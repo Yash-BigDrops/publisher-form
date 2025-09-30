@@ -277,7 +277,7 @@ const FileUploadModal: React.FC<FileUploadModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-color-border">

@@ -54,7 +54,22 @@ export async function saveCreativeMetadata(arg: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(arg),
   });
-  if (!r.ok) throw new Error("Save metadata failed");
+  
+  if (!r.ok) {
+    let errorMessage = "Save metadata failed";
+    try {
+      const errorData = await r.json();
+      errorMessage = errorData.error || errorData.message || errorMessage;
+      if (errorData.detail) {
+        errorMessage += `: ${errorData.detail}`;
+      }
+    } catch (parseError) {
+      // If we can't parse the error response, use the status text
+      errorMessage = `Save metadata failed: ${r.status} ${r.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+  
   return r.json();
 }
 

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { ErrorMessage } from '@/components/ui/error-message'
 import { File, FileArchive, PencilLine, Search } from 'lucide-react'
 import React, { useEffect, useState, useCallback } from 'react'
-import { FileUploadModal, UploadType, FromSubjectLinesModal, SingleCreativeView, MultipleCreativeView } from '@/components/modals'
+import { FileUploadModal, UploadType, FromSubjectLinesModal, SingleCreativeView, MultipleCreativeView, ConfirmationModal } from '@/components/modals'
 import { formatFileSize } from '@/constants'
 import { useFormValidation } from '@/hooks/useFormValidation'
 
@@ -122,6 +122,8 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
   const [currentUploadType, setCurrentUploadType] = useState<UploadType>('single')
   const [isFromSubjectLinesModalOpen, setIsFromSubjectLinesModalOpen] = useState(false)
+  const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false)
+  const [pendingCreativeTypeChange, setPendingCreativeTypeChange] = useState<string | null>(null)
   
   const [hasFromSubjectLines, setHasFromSubjectLines] = useState(false)
   const [hasUploadedFiles, setHasUploadedFiles] = useState(false)
@@ -152,6 +154,14 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
   }, []);
 
   const handleSelectChange = (fieldName: string, value: string) => {
+    // Check if creative type is being changed and there are uploaded files
+    if (fieldName === 'creativeType' && uploadedFiles.length > 0 && formData.creativeType !== value) {
+      // Store the pending change and show confirmation modal
+      setPendingCreativeTypeChange(value);
+      setIsConfirmationModalOpen(true);
+      return; // Don't change the creative type yet
+    }
+    
     onDataChange({ [fieldName]: value })
     
     if (fieldName === 'offerId') {
@@ -452,6 +462,38 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
       validationHook.handleFieldChange('priority', priority, true)
     }
   }
+
+  // Confirmation modal handlers
+  const handleConfirmCreativeTypeChange = () => {
+    if (pendingCreativeTypeChange) {
+      // Clear uploaded files when creative type changes
+      setUploadedFiles([]);
+      setLastError(null);
+      
+      // Clear from/subject lines if changing away from email
+      if (formData.creativeType === 'email' && pendingCreativeTypeChange !== 'email') {
+        onDataChange({ fromLines: '', subjectLines: '' });
+        setHasFromSubjectLines(false);
+      }
+      
+      // Apply the creative type change
+      onDataChange({ creativeType: pendingCreativeTypeChange });
+      
+      if (validationHook) {
+        validationHook.handleFieldChange('creativeType', pendingCreativeTypeChange, true);
+      }
+    }
+    
+    // Close modal and reset pending change
+    setIsConfirmationModalOpen(false);
+    setPendingCreativeTypeChange(null);
+  }
+
+  const handleCancelCreativeTypeChange = () => {
+    // Close modal and reset pending change without applying the change
+    setIsConfirmationModalOpen(false);
+    setPendingCreativeTypeChange(null);
+  }
   
   // Separate fields by type for proper ordering
   const selectFields = Constants.formFields.filter(field => 
@@ -677,7 +719,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
         )}
         
         {/* Show uploaded from/subject lines if available */}
-        {hasFromSubjectLines && (
+        {hasFromSubjectLines && formData.creativeType === 'email' && (
           <div className="space-y-3">
             <Label className="text-base font-medium">From & Subject Lines</Label>
             <div className="p-4 border border-green-200 bg-green-50 rounded-lg">
@@ -920,6 +962,7 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
           }}
           creative={selectedCreative}
           onFileNameChange={handleFileNameChange}
+          creativeType={formData.creativeType}
         />
       )}
       
@@ -936,8 +979,21 @@ const CreativeDetails: React.FC<CreativeDetailsProps> = ({
           zipFileName={zipFileName}
           onRemoveCreative={handleRemoveCreative}
           onFileNameChange={handleFileNameChange}
+          creativeType={formData.creativeType}
         />
       )}
+      
+      {/* Confirmation Modal for Creative Type Change */}
+      <ConfirmationModal
+        isOpen={isConfirmationModalOpen}
+        onClose={handleCancelCreativeTypeChange}
+        onConfirm={handleConfirmCreativeTypeChange}
+        title="Are you sure?"
+        message="Changing the creative type will permanently delete all your uploaded creatives. You will need to upload them again after changing the type. This action cannot be undone."
+        confirmText="Yes, Change Type"
+        cancelText="Cancel"
+        type="warning"
+      />
     </div>
   )
 }
